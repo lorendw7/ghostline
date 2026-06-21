@@ -11,6 +11,17 @@
 
 ---
 
+## 📚 文档导航
+
+| 文档 | 回答的问题 |
+| --- | --- |
+| **README**（本文） | 这是什么、长什么样、用什么技术 |
+| [ROADMAP](./ROADMAP.md) | 按什么顺序做 —— 学习优先的纵切片路线 |
+| [GOALS](./GOALS.md) | 做到什么程度算「完整且实用」—— 全功能 + 优先级 + v1.0 验收清单 |
+| [PRODUCTION](./PRODUCTION.md) | 工业级工程严谨度 —— 安全、可靠、可观测、合规、发布 |
+
+---
+
 ## 两大核心模块
 
 ### 💬 聊天模式（即时）
@@ -74,10 +85,16 @@
 公钥上传服务器
 私钥永远留在本地
 
-发消息 / 写信：用对方公钥加密
+发消息 / 写信：用对方公钥加密（NaCl box，需自己的私钥 + 对方公钥）
 服务器只见密文，无法读取内容
-见字模式额外加密存储至送达时间解锁
 ```
+
+> **关于见字模式的「延迟送达」**：服务器**永远**读不到明文，所以「到送达时间解锁」
+> 指的是服务器在 `deliverAt` 之前**扣着那团密文不下发**，到点才推给收信人，由收信人设备解密。
+> 服务器全程只是个「定时投递的密文邮筒」，而非到点解密。
+
+> **加密成熟度**：起步用 `tweetnacl box`（静态密钥对），对朋友圈够用，但**不提供前向保密 / 多设备**。
+> 升级路径（Double Ratchet 等）见 [PRODUCTION.md](./PRODUCTION.md) 的加密成熟度阶梯。
 
 ---
 
@@ -118,19 +135,22 @@
 
 ---
 
-## 开发路线
+## 开发路线（纵切片，学习优先）
 
-| 周次 | 内容 |
-| --- | --- |
-| 第 1-2 周 | 后端基础：Node.js + Express + JWT 认证 + 邀请码系统 |
-| 第 3-4 周 | Socket.io 实时通信，跑通单聊 |
-| 第 5-6 周 | 群聊逻辑 + 消息状态 |
-| 第 7-8 周 | 端到端加密（tweetnacl） |
-| 第 9-10 周 | 多媒体上传（Cloudflare R2） |
-| 第 11-12 周 | 推送通知（FCM） |
-| 第 13-14 周 | React Native 前端：聊天模式 |
-| 第 15-16 周 | React Native 前端：见字模式 + 动画 |
-| 第 17-18 周 | 邀请码 + 阅后即焚 + 截图检测 + 联调 |
+不按「先做完后端再做前端」的横向分层，而是**每个切片都从手机一路打通到服务器**，
+先窄后全 —— 第 1 周结束就能和朋友用两台真手机实时聊天，再逐层加深。
+
+| 切片 | 内容 | 结束时能验证 |
+| --- | --- | --- |
+| 0 | 环境搭建：Expo + 最小 Express | 手机连上本机后端 |
+| 1 | 明文实时单聊（Socket.io） | 两台手机实时收发 ⭐ |
+| 2 | 身份 + 持久化（JWT + 邀请码 + Supabase） | 离线消息、重启不丢 |
+| 3 | 端到端加密（tweetnacl + secure-store） | 数据库里只有密文 ⭐ |
+| 4 | 聊天打磨（状态 / 在线 / 媒体 / 推送） | 双勾已读、推送送达 |
+| 5 | 见字模式（信纸 / 封印 / 延迟送达 / 动画） | 定时送达 + 拆信 ⭐ |
+| 6 | 加固与发布（阅后即焚 / 截图 / 群聊 / 打包） | 朋友当日常工具用 |
+
+> 完整切片说明见 [ROADMAP.md](./ROADMAP.md)；功能优先级与 v1.0 验收清单见 [GOALS.md](./GOALS.md)。
 
 ---
 
@@ -150,6 +170,17 @@
 
 - 💬 **Instant** —— say it as it comes, end-to-end encrypted chat
 - 📜 **Letters (见字)** —— say it with intention, classical-style correspondence
+
+---
+
+## 📚 Docs
+
+| Doc | Answers |
+| --- | --- |
+| **README** (this) | What it is, what it looks like, what it's built with |
+| [ROADMAP](./ROADMAP.md) | What order to build it in — learning-first vertical slices |
+| [GOALS](./GOALS.md) | What "complete & practical" means — full features + priorities + v1.0 checklist |
+| [PRODUCTION](./PRODUCTION.md) | Production-grade rigor — security, reliability, observability, compliance, release |
 
 ---
 
@@ -216,10 +247,18 @@ A key pair is generated locally on the device at registration
 The public key is uploaded to the server
 The private key never leaves the device
 
-Sending a message / writing a letter: encrypted with the recipient's public key
+Sending a message / writing a letter: encrypted with the recipient's public key (NaCl box — needs your private key + their public key)
 The server only ever sees ciphertext and cannot read the content
-Letter mode is additionally encrypted at rest until its delivery time unlocks it
 ```
+
+> **On letter mode's "delayed delivery":** the server can *never* read the plaintext, so "unlock at
+> delivery time" means the server simply **withholds the (still-encrypted) blob until `deliverAt`**,
+> then pushes it to the recipient, whose device decrypts it. The server is just a "timed ciphertext
+> mailbox," never a decryptor.
+
+> **Crypto maturity:** we start with `tweetnacl box` (static key pairs) — fine for a circle of friends,
+> but it provides **no forward secrecy / multi-device**. Upgrade path (Double Ratchet, etc.) is in
+> [PRODUCTION.md](./PRODUCTION.md).
 
 ---
 
@@ -260,19 +299,24 @@ Letter mode is additionally encrypted at rest until its delivery time unlocks it
 
 ---
 
-## Development Roadmap
+## Development Roadmap (vertical slices, learning-first)
 
-| Weeks | Focus |
-| --- | --- |
-| Weeks 1-2 | Backend basics: Node.js + Express + JWT auth + invite-code system |
-| Weeks 3-4 | Socket.io real-time, get 1-on-1 chat working |
-| Weeks 5-6 | Group chat logic + message status |
-| Weeks 7-8 | End-to-end encryption (tweetnacl) |
-| Weeks 9-10 | Multimedia upload (Cloudflare R2) |
-| Weeks 11-12 | Push notifications (FCM) |
-| Weeks 13-14 | React Native frontend: chat mode |
-| Weeks 15-16 | React Native frontend: letter mode + animations |
-| Weeks 17-18 | Invite codes + burn-after-reading + screenshot detection + integration |
+Instead of "finish all the backend, then all the frontend," **every slice cuts straight through
+from phone to server** — narrow but complete first, then deepen. By end of week 1 you and a friend
+are chatting on two real phones.
+
+| Slice | Focus | Verifiable when done |
+| --- | --- | --- |
+| 0 | Setup: Expo + minimal Express | Phone reaches local backend |
+| 1 | Plaintext real-time 1:1 chat (Socket.io) | Two phones exchange messages ⭐ |
+| 2 | Identity + persistence (JWT + invites + Supabase) | Offline delivery, survives restart |
+| 3 | End-to-end encryption (tweetnacl + secure-store) | DB holds only ciphertext ⭐ |
+| 4 | Chat polish (status / presence / media / push) | Read receipts, push delivered |
+| 5 | Letter mode (stationery / sealing / delay / animation) | Timed delivery + opening ⭐ |
+| 6 | Hardening & release (burn / screenshot / group / build) | Friends use it daily |
+
+> Full slice breakdown in [ROADMAP.md](./ROADMAP.md); feature priorities and the v1.0 acceptance
+> checklist in [GOALS.md](./GOALS.md). Production-grade engineering in [PRODUCTION.md](./PRODUCTION.md).
 
 ---
 
