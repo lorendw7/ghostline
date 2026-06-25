@@ -1,174 +1,169 @@
-# Ghostline 生产级清单(Production-Grade)
+# Ghostline Production-Grade Checklist
 
-> README=愿景 · ROADMAP=做的顺序 · GOALS=完整且实用 · **本文=做到工业级该有的工程严谨度**。
+> README = vision · ROADMAP = the order you build in · GOALS = complete and practical · **This doc = the engineering rigor it takes to reach industrial grade.**
 >
-> 「生产级」≠ 用户多,而是:**就算只有几个朋友用,系统也经得起真实世界的网络抖动、
-> 攻击者、密钥泄露、服务器宕机、错误版本发布、应用商店审核、隐私法规这些考验。**
+> "Production-grade" ≠ lots of users. It means: **even if only a few friends use it, the system holds up against real-world network jitter, attackers, key leaks, server outages, bad releases, app store review, and privacy regulations.**
 >
-> 关键认知:**生产级是「过程」不是「功能」。** 同一个聊天功能,玩具版和生产版的差别在于
-> 它有没有测试、监控、回滚、威胁建模、灾备——这些用户看不见,但缺了迟早出事。
+> Key insight: **production-grade is a "process," not a "feature."** For the same chat feature, the difference between the toy version and the production version is whether it has tests, monitoring, rollback, threat modeling, and disaster recovery — things users never see, but whose absence will eventually bite you.
 
 ---
 
-## 0 · 先校准期望:你的加密够「生产级」吗?
+## 0 · Calibrate expectations first: is your encryption "production-grade"?
 
-诚实地讲:`tweetnacl box` + 助记词恢复,对朋友圈**够用**,但要打「生产级端到端加密」的招牌还差一截。
-真正生产级的 E2EE(Signal、WhatsApp、Matrix)有**前向保密**和**后向保密**——
-单条私钥泄露不会暴露全部历史/未来消息。给自己一个**加密成熟度阶梯**,别一步到位也别自欺:
+Honest take: `tweetnacl box` + mnemonic recovery is **good enough** for a circle of friends, but it falls short of earning the "production-grade end-to-end encryption" label. True production-grade E2EE (Signal, WhatsApp, Matrix) has **forward secrecy** and **post-compromise security** — a single leaked private key won't expose all past/future messages. Give yourself an **encryption maturity ladder**; don't try to do it all at once, and don't fool yourself either:
 
-| 阶段 | 方案 | 保证 | 何时上 |
+| Stage | Approach | Guarantee | When to ship |
 | --- | --- | --- | --- |
-| L1 | `nacl.box`(静态密钥对) | 服务器读不到明文 | 起步(切片 3) |
-| L2 | + 每会话临时密钥 + 消息序号防重放 | 基础重放保护 | v1.0 前 |
-| **L3** | **Double Ratchet(双棘轮)** | **前向 + 后向保密** | **真要叫「生产级 E2EE」时** |
-| L4 | MLS / sender keys | 高效群组前向保密 | 多人群组规模化时(可能不做) |
+| L1 | `nacl.box` (static key pairs) | Server can't read plaintext | Start here (slice 3) |
+| L2 | + ephemeral per-session keys + message sequence numbers for replay protection | Basic replay protection | Before v1.0 |
+| **L3** | **Double Ratchet** | **forward secrecy + post-compromise security** | **When you truly want to call it "production-grade E2EE"** |
+| L4 | MLS / sender keys | Efficient group forward secrecy | When scaling large group chats (may skip) |
 
-> 务实建议:**用 `libsignal` 这类经过审计的现成库,不要自己手搓 Double Ratchet。**
-> 自研密码学协议是生产环境最危险的事之一。先 L1 跑通,公开宣称时如实标注当前等级。
+> Pragmatic advice: **use an audited off-the-shelf library like `libsignal`; do not hand-roll Double Ratchet yourself.**
+> Rolling your own crypto protocol is one of the most dangerous things you can do in production. Get L1 working first, and when you make public claims, honestly label your current level.
 
 ---
 
-## 1 · 安全加固与威胁建模(生产级的第一支柱)
+## 1 · Security hardening and threat modeling (the first pillar of production-grade)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **写一份威胁模型文档** | **P0** | 明确:防谁(好奇的服务器管理员?偷手机的人?网络监听者?)、不防谁(国家级对手)。一切安全决策的地基。 |
-| 密钥轮换机制 | P1 | 公钥可更新、可吊销;老设备丢失能让其密钥失效。 |
-| 重放 / 篡改防护 | P0 | 每条消息带序号+时间窗+认证标签,拒绝重复和被改的密文。 |
-| Nonce 绝不复用 | P0 | NaCl 同密钥下 nonce 复用 = 加密直接破功。用计数器或随机+检查。 |
-| 传输层 TLS + 证书校验 | P0 | 即便内容已 E2EE,信道也必须 HTTPS/WSS,并做证书钉扎(pinning)。 |
-| 依赖漏洞扫描 | P1 | `npm audit` / Dependabot / Snyk,加密库的 CVE 要第一时间知道。 |
-| 密钥/密文落库前再校验 | P1 | 服务器拒绝任何看起来像明文的字段(纵深防御)。 |
-| 速率限制 / 防爆破 | P0 | 登录、邀请码、发消息全要限流,保护小服务器不被打挂。 |
-| 安全响应流程 | P1 | 朋友报「我密钥泄露了」时,有一套明确的吊销+轮换步骤。 |
-| 第三方安全审查(轻量) | P2 | 至少找懂行的人 review 一遍加密代码,别一个人闭门造车。 |
+| **Write a threat model document** | **P0** | Be explicit: who you defend against (a curious server admin? a phone thief? a network eavesdropper?) and who you don't (nation-state adversaries). The foundation of every security decision. |
+| Key rotation mechanism | P1 | Public keys can be updated and revoked; a lost old device can have its keys invalidated. |
+| Replay / tampering protection | P0 | Every message carries a sequence number + time window + authentication tag; reject duplicate and modified ciphertext. |
+| Never reuse a nonce | P0 | Under NaCl, nonce reuse with the same key = encryption breaks outright. Use a counter, or random + a check. |
+| Transport-layer TLS + certificate validation | P0 | Even with content already E2EE, the channel must be HTTPS/WSS, with certificate pinning. |
+| Dependency vulnerability scanning | P1 | `npm audit` / Dependabot / Snyk; you must learn about CVEs in crypto libraries immediately. |
+| Re-validate keys/ciphertext before persisting | P1 | The server rejects any field that looks like plaintext (defense in depth). |
+| Rate limiting / brute-force protection | P0 | Throttle login, invite codes, and message sending — protect a small server from being knocked over. |
+| Security response process | P1 | When a friend reports "my key leaked," have a clear revoke + rotate procedure. |
+| Third-party security review (lightweight) | P2 | At minimum, get someone knowledgeable to review the crypto code once — don't build it alone behind closed doors. |
 
 ---
 
-## 2 · 基础设施与环境(IaC + 多环境)
+## 2 · Infrastructure and environments (IaC + multiple environments)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **dev / staging / prod 三套环境** | **P0** | 永远不要拿生产库做实验。staging 跟生产同构,发布前先在这验。 |
-| 配置即代码 / 可复现部署 | P1 | 部署步骤写成脚本或 Railway/Render 配置,换台机器能一键重建。 |
-| **密钥/凭据集中管理** | **P0** | 数据库密码、JWT secret、R2 凭据进密钥管理(环境变量加密存储),**绝不进 git**。 |
-| 自动化数据库迁移 | P0 | 用迁移工具(如 Prisma Migrate / Drizzle),schema 变更可版本化、可回滚。 |
-| 健康检查端点 | P1 | `/health` 给监控探活,负载均衡据此摘除坏实例。 |
-| 优雅关闭 | P1 | 重启/部署时,先停止接新连接、把在途消息处理完再退出。 |
+| **Three environments: dev / staging / prod** | **P0** | Never experiment on the production database. Keep staging isomorphic to prod and verify there before releasing. |
+| Config-as-code / reproducible deployment | P1 | Write deployment steps as scripts or Railway/Render config so a new machine can be rebuilt with one click. |
+| **Centralized secret/credential management** | **P0** | Database passwords, JWT secret, and R2 credentials go into secret management (encrypted environment-variable storage) and **never into git**. |
+| Automated database migrations | P0 | Use a migration tool (e.g., Prisma Migrate / Drizzle) so schema changes are versioned and reversible. |
+| Health check endpoint | P1 | `/health` for monitoring liveness; the load balancer uses it to remove bad instances. |
+| Graceful shutdown | P1 | On restart/deploy, stop accepting new connections first, finish processing in-flight messages, then exit. |
 
 ---
 
-## 3 · 可靠性与可扩展性(撑住真实负载)
+## 3 · Reliability and scalability (handling real load)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **Socket.io 多实例 + Redis 适配器** | P1 | 单进程撑不住时,多个后端实例靠 Redis 广播同步,水平扩展。 |
-| 连接数 / 背压管理 | P1 | 限制单用户连接、给消息队列设上限,防止一个客户端拖垮服务。 |
-| 幂等性 | P0 | 同一条消息重发多次,服务器只落一次(靠客户端消息 ID 去重)。 |
-| 优雅降级 | P1 | Redis 挂了仍能发消息(降级为不显示在线状态),而不是整个崩。 |
-| 离线消息有上限 + 过期 | P1 | 长期不上线的人,堆积的密文要有容量上限和过期策略。 |
-| 负载/压力测试 | P2 | 上线前模拟几十路并发,知道天花板在哪。 |
+| **Multi-instance Socket.io + Redis adapter** | P1 | When a single process can't keep up, multiple backend instances sync via Redis broadcast for horizontal scaling. |
+| Connection count / backpressure management | P1 | Cap per-user connections and set limits on message queues to prevent one client from dragging down the service. |
+| Idempotency | P0 | If the same message is resent multiple times, the server persists it only once (deduplicated via the client message ID). |
+| Graceful degradation | P1 | If Redis goes down, messages can still be sent (degrading to not showing online status) rather than the whole thing crashing. |
+| Offline message cap + expiry | P1 | For people who stay offline long-term, accumulated ciphertext needs a capacity cap and an expiry policy. |
+| Load / stress testing | P2 | Before launch, simulate dozens of concurrent connections so you know where the ceiling is. |
 
 ---
 
-## 4 · 数据管理(备份、迁移、删除权)
+## 4 · Data management (backups, migration, right to deletion)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **自动定期备份 + 恢复演练** | **P0** | 备份没演练过 = 没有备份。定期真的恢复一次到 staging 验证。 |
-| 数据保留与清理策略 | P1 | 已送达即焚的消息、过期媒体,要有后台任务真删,不只标记。 |
-| 用户数据导出 / 删号 | P1 | 朋友要求「删掉我所有数据」,要能彻底执行(契合 GDPR 精神)。 |
-| 媒体存储生命周期 | P1 | R2 上的孤儿文件(消息删了文件还在)要定期清理,控成本。 |
-| Schema 演进不丢数据 | P0 | 迁移要前向兼容,旧客户端在升级期间仍能工作。 |
+| **Automated periodic backups + restore drills** | **P0** | A backup never tested = no backup. Periodically do a real restore to staging to verify. |
+| Data retention and cleanup policy | P1 | Delivered-and-burned messages and expired media need a background job that truly deletes them, not just marks them. |
+| User data export / account deletion | P1 | When a friend asks "delete all my data," you must be able to fully execute it (in the spirit of GDPR). |
+| Media storage lifecycle | P1 | Orphaned files on R2 (message deleted but file remains) should be cleaned up periodically to control cost. |
+| Schema evolution without data loss | P0 | Migrations must be forward-compatible; old clients still work during the upgrade window. |
 
 ---
 
-## 5 · 可观测性(看得见才修得了)
+## 5 · Observability (you can only fix what you can see)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **错误监控(Sentry)** | **P0** | 前端崩溃 + 后端异常都上报,带堆栈,朋友闪退你立刻知道。 |
-| 结构化日志 | P0 | JSON 日志、可检索;**严禁记录任何消息明文或私钥**。 |
-| 关键指标 / 仪表盘 | P1 | 在线人数、消息吞吐、错误率、推送成功率、延迟。 |
-| 告警 | P1 | 服务宕机、错误率飙升时,自动通知到你的手机/邮箱。 |
-| 链路追踪 | P2 | 慢请求能定位到哪一环。 |
-| 正常运行时间监控 | P1 | 外部探活(UptimeRobot 等),服务挂了第一时间收到。 |
-| SLO / 错误预算 | P2 | 给自己定个目标(如 99% 可用),量化「够好了」。 |
+| **Error monitoring (Sentry)** | **P0** | Report both frontend crashes and backend exceptions, with stack traces — when a friend's app crashes, you know instantly. |
+| Structured logging | P0 | JSON logs, searchable; **never log any message plaintext or private keys**. |
+| Key metrics / dashboards | P1 | Online users, message throughput, error rate, push success rate, latency. |
+| Alerting | P1 | When the service goes down or the error rate spikes, automatically notify your phone/email. |
+| Tracing | P2 | Pinpoint which step a slow request is stuck on. |
+| Uptime monitoring | P1 | External liveness checks (UptimeRobot, etc.) so you're notified the moment the service goes down. |
+| SLO / error budget | P2 | Set yourself a target (e.g., 99% availability) to quantify "good enough." |
 
 ---
 
-## 6 · 质量保障(测试金字塔 + 静态检查)
+## 6 · Quality assurance (test pyramid + static checks)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **加密逻辑单元测试** | **P0** | 加解密、密钥派生、恢复短语——这几块错一点就泄密,必须测透。 |
-| 核心链路集成测试 | P1 | 注册→加好友→发消息→对方解密,端到端跑一遍。 |
-| 关键 UI 的 E2E 测试 | P2 | Detox/Maestro 跑通登录+发消息的真机流程。 |
-| 静态类型 / Lint | P1 | TypeScript + ESLint,把一类 bug 挡在运行前。 |
-| 测试覆盖率门槛 | P2 | 核心模块设最低覆盖率,新代码不许拉低。 |
-| Code review(哪怕自审) | P1 | 加密相关改动绝不直接合,至少自己冷静复审或找人看。 |
+| **Unit tests for crypto logic** | **P0** | Encryption/decryption, key derivation, recovery phrase — a small mistake in these leaks secrets, so they must be tested thoroughly. |
+| Integration tests for core flows | P1 | Register → add friend → send message → other party decrypts, run end-to-end. |
+| E2E tests for critical UI | P2 | Detox/Maestro running the real-device flow of login + sending a message. |
+| Static typing / Lint | P1 | TypeScript + ESLint, catching a whole class of bugs before runtime. |
+| **i18n translation completeness check** | P1 | Verify in CI: no hardcoded user-visible strings, each language's key set matches `en` (a missing key fails the build), no unused keys. When a translation is missing, **fall back to English at runtime** rather than showing the key name or blank. |
+| Pseudolocalization walkthrough | P2 | Run the UI through lengthened/accented pseudo-translations to catch hardcoded widths, truncation, and non-wrapping layout bugs early — cheaper than waiting for real Japanese translations to come back before fixing. |
+| Test coverage threshold | P2 | Set a minimum coverage for core modules; new code isn't allowed to lower it. |
+| Code review (even self-review) | P1 | Never directly merge crypto-related changes; at minimum, calmly self-review or have someone look. |
 
 ---
 
-## 7 · CI/CD 与发布管理(安全地出版本)
+## 7 · CI/CD and release management (shipping versions safely)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **CI:提交即跑测试 + 构建** | **P0** | GitHub Actions,测试不过不许合并。 |
-| EAS Build 自动出包 | P1 | Android/iOS 构建流水线化,不手动点。 |
-| **OTA 热更新(Expo Updates)** | P1 | 改 JS 不用重新过商店审核,小修可秒级推送给用户。 |
-| 灰度 / 分阶段发布 | P2 | 先发给一两个朋友,稳了再全量。 |
-| **强制升级机制** | P1 | 服务端能要求过旧的客户端必须更新(尤其加密协议变更时)。 |
-| 一键回滚 | P0 | 新版本出事,能立刻回到上一个好版本(OTA 回滚 + 后端回滚)。 |
-| 版本号 + 变更日志 | P1 | 语义化版本,记录每版改了啥,出事好定位。 |
-| 数据库迁移纳入流水线 | P1 | 部署时自动、安全地跑迁移,带前置备份。 |
+| **CI: run tests + build on every commit** | **P0** | GitHub Actions; no merge if tests fail. |
+| EAS Build automated packaging | P1 | Pipeline the Android/iOS builds; don't click manually. |
+| **OTA updates (Expo Updates)** | P1 | Changing JS without re-passing store review; small fixes can be pushed to users in seconds. |
+| Staged / phased rollout | P2 | Release to one or two friends first, then go full once it's stable. |
+| **Forced upgrade mechanism** | P1 | The server can require overly old clients to update (especially when the crypto protocol changes). |
+| One-click rollback | P0 | When a new version breaks, you can immediately revert to the last good version (OTA rollback + backend rollback). |
+| Version number + changelog | P1 | Semantic versioning, recording what changed in each version, so issues are easy to locate. |
+| Database migrations in the pipeline | P1 | Run migrations automatically and safely on deploy, with a pre-migration backup. |
 
 ---
 
-## 8 · 合规与应用商店(上架绕不过的坎)
+## 8 · Compliance and app stores (the hurdles you can't skip to publish)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **隐私政策 + 服务条款** | **P0** | 上架强制要求。如实写明你存什么(密文+公钥)、不存什么(明文)。 |
-| **加密出口合规声明** | **P0** | App Store/Google Play 对含加密的 app 有出口合规问答,必须如实勾选(多数开源加密走豁免,但要申报)。 |
-| 商店「数据安全」表单 | P0 | Google Data Safety / Apple Privacy Nutrition Label 要填准。 |
-| 年龄分级 / 内容政策 | P1 | 私密通信 app 的分级和合规问卷。 |
-| 账号删除入口(商店要求) | P0 | Apple/Google 现都要求 app 内可发起删号。 |
-| 开源协议合规(AGPL) | P1 | 引入第三方库时检查协议兼容;衍生/服务端运行的 copyleft 义务。 |
+| **Privacy policy + terms of service** | **P0** | Mandatory for store listing. Truthfully state what you store (ciphertext + public keys) and what you don't (plaintext). |
+| **Encryption export compliance declaration** | **P0** | App Store/Google Play have export-compliance questionnaires for apps containing encryption; you must answer truthfully (most open-source crypto qualifies for an exemption, but you still must declare it). |
+| Store "data safety" form | P0 | Google Data Safety / Apple Privacy Nutrition Label must be filled out accurately. |
+| Age rating / content policy | P1 | The rating and compliance questionnaire for a private messaging app. |
+| Store asset localization (en→ja→zh) | P2 | App Store/Play titles, descriptions, and screenshots produced per target language; ship English first, fill in Japanese/Chinese as translation progresses. The privacy policy should also be provided in the corresponding languages. |
+| Account deletion entry point (store requirement) | P0 | Apple/Google now both require that account deletion can be initiated in-app. |
+| Open-source license compliance (AGPL) | P1 | When pulling in third-party libraries, check license compatibility; mind copyleft obligations for derivatives / server-side operation. |
 
 ---
 
-## 9 · 运维与事故响应(让它长期活着)
+## 9 · Operations and incident response (keeping it alive long-term)
 
-| 目标 | 优先级 | 说明 |
+| Goal | Priority | Notes |
 | --- | --- | --- |
-| **Runbook / 操作手册** | P1 | 「服务挂了怎么重启」「密钥泄露怎么轮换」「怎么恢复备份」写成步骤,慌乱时照做。 |
-| 事故复盘(无指责) | P2 | 出过的事记下来,根因+改进,别在同一个坑摔两次。 |
-| 成本监控 | P1 | 免费额度有上限,接近时告警,别哪天突然欠费停服。 |
-| 状态页 / 给朋友的通知渠道 | P2 | 计划维护或故障时,有渠道告诉用户。 |
-| 数据中心/区域选择 | P2 | 选离用户近、合规友好的区域。 |
+| **Runbook / operations manual** | P1 | "How to restart when the service goes down," "how to rotate when a key leaks," "how to restore a backup" — written as steps so you can follow them when panicked. |
+| Blameless postmortem | P2 | Record what happened, with root cause + improvements, so you don't fall into the same pit twice. |
+| Cost monitoring | P1 | Free tiers have caps; alert as you approach them so you don't suddenly go into arrears and lose service. |
+| Status page / notification channel for friends | P2 | Have a channel to tell users about planned maintenance or outages. |
+| Data center / region selection | P2 | Choose a region close to users and compliance-friendly. |
 
 ---
 
-## 落地节奏:生产级不是一次到位,而是逐层加固
+## Rollout cadence: production-grade isn't done in one shot — it's hardened layer by layer
 
-> 别被这张大清单吓退。**先按 ROADMAP 把功能切片做出来,再用本文的 P0 给每个切片「加固」。**
-> 推荐三道加固关:
+> Don't let this big checklist scare you off. **First build out the feature slices per the ROADMAP, then "harden" each slice with the P0s in this doc.**
+> Three recommended hardening gates:
 
-- **关卡 A(v1.0 发布前必须过)**:威胁模型文档 · TLS+证书钉扎 · nonce 不复用 · 限流 ·
-  三套环境 · 密钥不进 git · 自动备份+恢复演练 · Sentry · CI 测试门 · 一键回滚 ·
-  隐私政策+出口合规+删号入口。
-  → 这些是 P0,**缺一个都不该把 app 发给朋友当日常用**。
+- **Gate A (must pass before the v1.0 release)**: threat model document · TLS + certificate pinning · no nonce reuse · rate limiting · three environments · keys not in git · automated backups + restore drills · Sentry · CI test gate · one-click rollback · privacy policy + export compliance + account deletion entry point.
+  → These are P0; **missing even one means you shouldn't hand the app to friends for daily use**.
 
-- **关卡 B(v1.x 稳定期补齐)**:Redis 多实例 · 优雅降级 · 数据导出/删除 ·
-  指标仪表盘+告警 · 集成测试 · OTA 热更新 · 强制升级 · Runbook。
+- **Gate B (filled in during the v1.x stabilization period)**: multi-instance Redis · graceful degradation · data export/deletion · metrics dashboards + alerting · integration tests · OTA updates · forced upgrade · runbook.
 
-- **关卡 C(真要打「生产级 E2EE」招牌时)**:加密升到 **L3 Double Ratchet(用 libsignal)** ·
-  密钥轮换/吊销 · 第三方安全审查 · E2E 自动化测试 · SLO。
+- **Gate C (when you truly want to claim the "production-grade E2EE" label)**: upgrade encryption to **L3 Double Ratchet (using libsignal)** · key rotation/revocation · third-party security review · automated E2E testing · SLO.
 
 ---
 
-## 一句话总结
+## One-line summary
 
-> 功能让朋友愿意打开它;**生产级的工程严谨,让它在你睡觉时也不出事、出了事也能修。**
-> 用户看不见测试、监控、备份和回滚——但正是这些,决定了这个 app 是「玩具」还是「服务」。
+> Features make friends want to open it; **production-grade engineering rigor keeps it from failing while you sleep, and lets you fix it when it does fail.**
+> Users never see the tests, monitoring, backups, and rollback — but those are exactly what decide whether this app is a "toy" or a "service."

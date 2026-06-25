@@ -1,145 +1,211 @@
-# Ghostline 开发路线图（学习优先 · 纵切片版）
+# Ghostline Development Roadmap (Learning-First · Vertical Slice Edition)
 
-> 这份路线图替代 README 里那张「后端先做满 12 周」的表。
-> 目标：**最大化学到的东西**，同时**每一两周就有能在真手机上用的东西**。
+> This roadmap replaces the "do all the backend first over a full 12 weeks" table in the README.
+> Goal: **maximize what you learn**, while **having something usable on a real phone every week or two**.
 >
-> 核心方法论：**纵切片（vertical slice）**。不按「先做完所有后端，再做完所有前端」的横向分层，
-> 而是每个切片都从手机一路打通到服务器，先做窄但完整的一条线，再逐层加深。
+> Core methodology: **vertical slice**. Instead of "finish all the backend first, then finish all the frontend" horizontal layering,
+> each slice goes all the way from the phone through to the server — build a narrow but complete line first, then deepen it layer by layer.
 
 ---
 
-## 为什么这样排（给未来的自己）
+## Why It's Ordered This Way (a note to future me)
 
-- **反馈最快 = 学得最牢。** 你写过 JS/前端，但 RN、实时通信、加密都是新的。
-  每个新概念一落地就在手机上看到真实效果，比闷头写两个月后端再联调记得牢得多。
-- **动力来自「能用」。** 第 1 周结束你就该能和一个朋友用两台手机发明文消息。
-  那一刻的成就感，是撑完后面加密、动画那些硬骨头的燃料。
-- **加密放在「明文能跑通」之后。** 先理解消息怎么流动，再理解怎么把它锁起来——
-  加密是给已有的数据流「加一层」，而不是从加密开始。
-
----
-
-## 关键技术澄清（动手前先读，避免走弯路）
-
-1. **见字模式的「到送达时间解锁」≠ 服务器解密。**
-   如果真是端到端加密，服务器**永远**读不到明文。所谓「解锁」只能是：
-   服务器在 `deliverAt` 之前**扣着那团密文不下发**，到点了才推给收信人，由收信人的设备解密。
-   服务器全程只是个「定时投递的密文邮筒」。README 的措辞要按这个理解。
-
-2. **私钥存哪：用 `expo-secure-store`，不是 MMKV。**
-   私钥应进 iOS Keychain / Android Keystore（`expo-secure-store` 封装好了）。
-   `react-native-mmkv` 适合存普通本地数据，但**它在 Expo Go 里跑不起来**（需要原生构建）。
-   → 起步阶段全程用 Expo Go + secure-store；要 MMKV 时再上 EAS dev build。
-
-3. **推送：先用 Expo Push，FCM 往后放。**
-   原生 FCM 在 Expo 里配置很折腾。Expo 自带的 Push Notifications 对小应用简单太多。
-   先用 Expo Push 跑通「收到信」的推送，等真有需求再换 FCM。
-
-4. **群聊的端到端加密是硬骨头，先别碰。**
-   群聊 E2EE（sender keys / MLS 协议）很复杂。「几个朋友」的规模下，
-   先做**逐人加密扇出**（给每个群成员各用其公钥加密一份）就够了。真正的群组加密协议留到最后或不做。
-
-5. **`tweetnacl` 的 `box` 是什么。**
-   `nacl.box(明文, nonce, 对方公钥, 我的私钥)` → 密文。
-   收方用 `nacl.box.open(密文, nonce, 我的公钥, 对方私钥)` 解开。
-   这就是「用对方公钥加密」的真实含义——它同时需要你自己的私钥。
-   **它不提供**：前向保密（私钥泄露则历史消息全暴露）、多设备、抵赖性。
-   对朋友圈够用，但你要清楚边界在哪——这正是学习的重点。
+- **Fastest feedback = strongest learning.** You've written JS/frontend, but RN, real-time communication, and encryption are all new.
+  Seeing each new concept produce a real effect on the phone the moment it lands sticks far better than burying your head in two months of backend before doing any integration.
+- **Motivation comes from "it works."** By the end of week 1 you should be able to send plaintext messages with a friend on two phones.
+  That moment of accomplishment is the fuel that carries you through the hard parts later — encryption, animation, and so on.
+- **Encryption comes after "plaintext works end to end."** Understand how messages flow first, then understand how to lock them up —
+  encryption is "adding a layer" on top of an existing data flow, not something to start from.
 
 ---
 
-## 切片路线（每个切片结尾都有「能在手机上验证的东西」）
+## Key Technical Clarifications (read before you start, to avoid detours)
 
-### 切片 0 · 环境与「Hello, 手机」（2-3 天）
-**做什么**
-- `npx create-expo-app`，用 Expo Go 在你自己的真手机上跑起来。
-- 起一个最小 Express 服务（本机），手机通过局域网 IP 请求到一个 `/ping`。
+1. **Letter Mode's "unlock at delivery time" ≠ server-side decryption.**
+   If this is truly end-to-end encryption, the server can **never** read the plaintext. The so-called "unlock" can only be:
+   the server **holds back that blob of ciphertext and doesn't deliver it** before `deliverAt`, then pushes it to the recipient when the time comes, and the recipient's device decrypts it.
+   The server is only ever a "mailbox that delivers ciphertext on a timer." The README's wording should be understood this way.
 
-**验证**：手机屏幕显示来自你电脑后端的一句话。
-**学到**：Expo/RN 工程结构、Metro、手机 ↔ 本机服务器怎么连。
+2. **Where the private key lives: use `expo-secure-store`, not MMKV.**
+   The private key should go into the iOS Keychain / Android Keystore (`expo-secure-store` wraps these for you).
+   `react-native-mmkv` is fine for ordinary local data, but **it doesn't run in Expo Go** (it needs a native build).
+   → In the getting-started phase, use Expo Go + secure-store throughout; move to an EAS dev build only when you actually need MMKV.
 
----
+3. **Push: use Expo Push first, leave FCM for later.**
+   Native FCM is fiddly to configure inside Expo. Expo's built-in Push Notifications are far simpler for a small app.
+   Get the "you received a letter" push working with Expo Push first, and switch to FCM only when there's a real need.
 
-### 切片 1 · 明文实时单聊（第 1 周）⭐ 第一个高光时刻
-**做什么**
-- 后端用 Socket.io，转发消息（先存内存，不落库、无账号）。
-- 前端一个聊天界面（先用 `react-native-gifted-chat`），两台手机连同一个服务。
+4. **Group-chat end-to-end encryption is a hard nut — don't touch it yet.**
+   Group E2EE (sender keys / the MLS protocol) is very complex. At a "few friends" scale,
+   doing **per-recipient encryption fan-out** first (encrypt one copy for each group member with their own public key) is enough. Leave a real group encryption protocol for last, or skip it.
+   Note the distinction between two kinds of "fan-out": **encryption fan-out** (on the client, encrypting one copy of ciphertext per person) and **transport fan-out**
+   (on the server, distributing one message to multiple online members). The Go service below only handles the latter — it forwards ciphertext and **never touches encryption**.
 
-**验证**：你和一个朋友各拿一台手机，实时收发明文消息。
-**学到**：WebSocket / Socket.io 事件模型、实时通信的「连接—事件—广播」心智模型。
-> 这是整个项目最重要的一周：它证明了「这事能成」。
+5. **No microservices, but it's worth making one cut to experience "service splitting."**
+   Microservices solve the problem of "a large team deploying independently + a single service that can't cope needing to scale on its own." You're one person, at friend-group scale,
+   and going fully microservices would only burn your time on inter-service communication, deployment orchestration, and distributed debugging instead of the E2EE and real-time communication you actually want to learn.
+   → Pragmatic approach: **the main backend is always a single Node service**; once the chat path runs smoothly, split just "presence + group-chat transport fan-out"
+   out into **a single standalone Go service** that communicates with Node via **Redis pub/sub** (see slice 6).
+   This way you **make only one cut** and genuinely experience drawing a service boundary, cross-language inter-process communication, and using Go's goroutine/channel
+   for high-concurrency fan-out — getting the most learning-valuable part of microservices thinking without taking on all of its complexity.
 
----
+6. **What `tweetnacl`'s `box` is.**
+   `nacl.box(plaintext, nonce, recipient public key, my private key)` → ciphertext.
+   The recipient opens it with `nacl.box.open(ciphertext, nonce, my public key, recipient private key)`.
+   This is the real meaning of "encrypt with the recipient's public key" — it also requires your own private key.
+   **What it does NOT provide**: forward secrecy (if the private key leaks, all historical messages are exposed), multi-device, deniability.
+   Good enough for a friend group, but you need to know where the boundaries are — that's exactly the point of learning.
 
-### 切片 2 · 身份与持久化（第 2 周）
-**做什么**
-- 账号注册/登录（用户名+密码 → JWT），邀请码校验。
-- 接 Supabase（Postgres），存用户表 + 消息表。
-- 离线消息：对方不在线时存库，上线再补发（store-and-forward）。
-
-**验证**：重启服务消息不丢；对方离线时发的消息，他上线能收到。
-**学到**：JWT 认证流程、SQL 建表、邀请码逻辑、离线投递模式。
-
----
-
-### 切片 3 · 端到端加密（第 3-4 周）⭐ 学习核心
-**做什么**
-- 注册时本机生成 `nacl.box.keyPair()`，公钥上传，私钥进 `expo-secure-store`。
-- 发消息：用对方公钥 + 自己私钥加密；服务器只转发/存储密文。
-- 收消息：本机解密。换设备 = 换密钥（先接受这个限制，不做多设备）。
-
-**验证**：在数据库里直接查消息表，看到的是乱码密文；只有收发双方手机能还原明文。
-**学到**：公钥密码学、密钥交换、E2EE 到底保证了什么、又**没**保证什么（见上面澄清 5）。
-> 故意把「不完美」讲清楚，才是真学到。
-
----
-
-### 切片 4 · 聊天体验打磨（第 5-6 周）
-**做什么**
-- 消息状态：已发送 / 已送达 / 已读。
-- 在线状态、未读数：接 Upstash Redis。
-- 图片消息：传 Cloudflare R2（注意：媒体也要客户端加密后再上传）。
-- 推送：Expo Push 跑通「你收到新消息」。
-
-**验证**：双勾/已读回执正确；杀掉 app 仍能收到推送。
-**学到**：消息状态机、Redis 做易失状态、对象存储、推送链路。
+7. **English-first, but externalize strings from day one — don't wait until you want to do multilingual.**
+   The app's primary language is **English**; the first batch of target languages is, in order, **English → 日本語 → 中文**.
+   The key isn't "translate now" but **don't hardcode now**: every sentence on the first screen goes through i18n resource files
+   (`expo-localization` reads the system language + `i18next`/`react-i18next` fetches the entries).
+   This way, adding a language afterward = adding one JSON file; if you hardcode all the way through, adding a language is a full rewrite — the cost difference is enormous.
+   Keep two boundaries firmly in mind: ① **only localize the UI shell, never translate user messages** (E2EE — the server can't read them either);
+   ② Letter Mode's **solar terms / lunar dates / seals are cultural content to preserve, not UI strings to translate away**
+   (in English, present them as "`Grain in Ear (芒种)`" — an "English label + (original)" style).
 
 ---
 
-### 切片 5 · 见字模式（第 7-9 周）⭐ 产品差异化
-**做什么**
-- 仿古信纸 UI（先做 1-2 种纸 + 1-2 个印章，别一上来做全套）。
-- 封印发送（不可撤回）、延迟送达（`node-cron` 到 `deliverAt` 才下发密文）。
-- 拆信 / 焚信动画（`react-native-reanimated`）。
-- 节气 / 农历时间显示（找个农历库，别自己算）。
+## Slice Roadmap (each slice ends with "something you can verify on the phone")
 
-**验证**：写一封信设「1 小时后送达」，到点对方手机才弹出推送并能拆开。
-**学到**：定时任务、动画库、把「延迟投递」和 E2EE 正确地拼在一起（见澄清 1）。
+### Slice 0 · Environment and "Hello, Phone" (2–3 days)
+**What to do**
+- `npx create-expo-app`, and get it running on your own real phone with Expo Go.
+- Stand up a minimal Express server (on your machine); the phone hits a `/ping` over the LAN via the local IP.
 
----
-
-### 切片 6 · 加固与发布（第 10 周起）
-**做什么**
-- 阅后即焚、截图检测（`expo-screen-capture`）。
-- 群聊：先做逐人加密扇出（见澄清 4）。
-- EAS Build 出 Android APK，直接发给朋友（$0）。iOS 走 TestFlight（$99/年，可选）。
-
-**验证**：真有几个朋友把它当日常工具用起来。
-**学到**：移动端发布流程、把玩具变成「别人愿意用」的产品之间的距离。
+**Verify**: the phone screen shows a sentence coming from the backend on your computer.
+**What you learn**: Expo/RN project structure, Metro, how the phone ↔ local server connect.
 
 ---
 
-## 取舍原则（什么时候该砍）
+### Slice 1 · Plaintext real-time one-on-one chat (week 1) ⭐ the first high point
+**What to do**
+- Backend uses Socket.io to forward messages (in memory first — no database, no accounts).
+- Frontend: a single chat screen (use `react-native-gifted-chat` to start), two phones connected to the same service.
+- **Install i18n from this very first screen**: `expo-localization` + `i18next`, all visible strings go through `t('key')`,
+  with English entries in `en.json`. Spending 10 extra minutes now saves you a full rewrite later when doing Japanese/Chinese (see clarification 7).
 
-- **先窄后全**：每个切片只做「能验证一条线」的最小量，别在切片 5 一次画 8 种信纸。
-- **够用就行的加密**：朋友圈场景下，`tweetnacl box` + secure-store 足够；
-  前向保密、多设备、群组协议都是「以后」或「不做」。
-- **借现成轮子**：农历、动画、推送都用库；唯独**加密那一层要自己写**，因为那是你最想学的。
-- **每个切片结束打个 git tag**，让「能跑的版本」永远找得回来。
+**Verify**: you and a friend each hold a phone and send/receive plaintext messages in real time.
+**What you learn**: the WebSocket / Socket.io event model, and the "connect — event — broadcast" mental model of real-time communication.
+> This is the most important week of the whole project: it proves "this thing can work."
 
 ---
 
-## 一句话总结
+### Slice 2 · Identity and persistence (week 2)
+**What to do**
+- Account registration/login (username + password → JWT), invite code validation.
+- Connect Supabase (Postgres), store a users table + a messages table.
+- Offline messages: when the other party is offline, store to the database and re-deliver when they come online (store-and-forward).
 
-> 横着分层让你两个月看不到手机上的东西；纵着切片让你每周都有能用的东西。
-> 学得最牢的知识，是那些一落地就在朋友手机上发光的知识。
+**Verify**: messages aren't lost when the service restarts; a message sent while the other party is offline is received when they come online.
+**What you learn**: the JWT auth flow, SQL table design, invite-code logic, the offline delivery pattern.
+
+---
+
+### Slice 3 · End-to-end encryption (weeks 3–4) ⭐ the learning core
+**What to do**
+- On registration, generate `nacl.box.keyPair()` locally, upload the public key, put the private key into `expo-secure-store`.
+- Sending a message: encrypt with the recipient's public key + your own private key; the server only forwards/stores ciphertext.
+- Receiving a message: decrypt locally. Switching devices = switching keys (accept this limitation for now; no multi-device).
+
+**Verify**: querying the messages table directly in the database shows garbled ciphertext; only the two phones (sender and recipient) can restore the plaintext.
+**What you learn**: public-key cryptography, key exchange, what E2EE actually guarantees — and what it does **not** (see clarification 6 above).
+> Spelling out the "imperfections" clearly is what real learning looks like.
+
+---
+
+### Slice 4 · Polishing the chat experience (weeks 5–6)
+**What to do**
+- Message status: sent / delivered / read.
+- Presence, unread counts: connect Upstash Redis (in the one-on-one phase, do presence in Node first — simple and sufficient;
+  in slice 6 you'll migrate it, together with group-chat fan-out, into the standalone Go service, and that's when you'll grasp "why split it out").
+- Image messages: upload to Cloudflare R2 (note: media must also be client-side encrypted before upload).
+- Push: get "you have a new message" working with Expo Push.
+
+**Verify**: double-check marks / read receipts are correct; you still receive a push after killing the app.
+**What you learn**: the message state machine, using Redis for volatile state, object storage, the push pipeline.
+
+---
+
+### Slice 5 · Letter Mode (weeks 7–9) ⭐ product differentiation
+**What to do**
+- Antique-style stationery UI (start with 1–2 papers + 1–2 seals; don't build the full set right away).
+- Sealing and sending (irrevocable), delayed delivery (`node-cron` delivers the ciphertext only at `deliverAt`).
+- Opening-a-letter / burn-a-letter animations (`react-native-reanimated`).
+- Solar term / lunar date display (find a lunar-calendar library, don't compute it yourself).
+
+**Verify**: write a letter set to "deliver in 1 hour"; only at that time does a push pop up on the other person's phone and they can open it.
+**What you learn**: scheduled tasks, animation libraries, correctly stitching "delayed delivery" together with E2EE (see clarification 1).
+
+---
+
+### Slice 6 · Go realtime fan-out service + group chat (weeks 10–12) ⭐ architecture & new language
+> This is your "learn more" cut: the first time you split a responsibility out of the main backend **into a standalone service**,
+> and write it in a new language (Go). **Make only this one cut** — don't go splitting other things off while you're at it (see clarification 5).
+>
+> 📘 **Production-grade build guide (in English, all code written by you yourself): [docs/realtime-service.md](docs/realtime-service.md)**
+> — covers architecture, type contracts, `select` multiplexing, the Hub pattern, heartbeat/backpressure, RWMutex trade-offs, Redis horizontal scaling,
+> graceful shutdown, observability, testing, a 10-step learning path, and a pitfalls checklist. Below is the outline of this slice; the details are all in that document.
+
+**Architecture (what it looks like after the split)**
+```
+Phone ──Socket.io──►  Node main backend (auth / storage / Letter Mode / business logic)
+                        │
+                        │  Redis pub/sub (the only contact point between the two processes)
+                        ▼
+Phone ──WebSocket──►  Go fan-out service (holds real-time connections / presence / group-chat transport fan-out)
+```
+> Who holds the phone's real-time long-lived connection is a real design choice:
+> to start, you can let Node keep holding the connection and have Go only do the fan-out computation behind it;
+> for the advanced version, let **Go hold the WebSocket long-lived connection directly**, with Node handing "the ciphertext to send" to Go via Redis.
+> Go for the advanced version — that's Go's home turf for concurrent connections, and it's where you actually learn something.
+
+**What to do**
+- Stand up a WebSocket service in Go (standard library `net/http` + `gorilla/websocket` or `nhooyr/websocket`).
+- One goroutine per connection to read, one goroutine to write; use a **channel** to deliver messages to the target connection —
+  this is the essence of Go's concurrency model, an entirely different mental model from Node's event loop.
+- Move presence into this service; Node publishes "deliver this ciphertext blob to group X" via Redis pub/sub, and Go subscribes and fans it out to online members.
+- Group chat: **encryption fan-out stays on the client** (encrypt one copy per member with their own public key, see clarification 4),
+  Go only handles **transport fan-out** (distributing these ciphertexts to the online people); offline people still go through Node's store-and-forward.
+
+**Verify**: create a 3-person group and have three phones send/receive in real time; Node and Go are two independent processes (restartable separately),
+decoupled via Redis; confirm in the database/logs that the Go service only ever handles ciphertext throughout.
+**What you learn**: how to draw a service boundary, decoupling cross-language processes via a message queue, Go's goroutine/channel concurrency model,
+and a comparison of two real-time stacks (event loop vs CSP) — something a single-language project can't give you.
+> Want to go further: later you can add horizontal scaling to the Go service (multiple instances + a shared presence table in Redis),
+> to feel "why the real-time layer is the first to need independent scaling" — but that's a post-v1.0 thing, don't do it now.
+
+---
+
+### Slice 7 · Hardening and release (from week 13)
+**What to do**
+- Disappearing messages (read-and-burn), screenshot detection (`expo-screen-capture`).
+- EAS Build to produce an Android APK and send it straight to friends ($0). iOS goes through TestFlight ($99/year, optional).
+- Deployment: both the Node main backend and the Go fan-out service go on Railway (two services), tied together by a shared Upstash Redis.
+
+**Verify**: a few friends actually start using it as a daily tool.
+**What you learn**: the mobile release process, multi-service deployment, and the distance between a toy and a product "other people want to use."
+
+---
+
+## Trade-off Principles (when to cut)
+
+- **Narrow first, complete later**: each slice does only the minimum needed to "verify one line"; don't draw 8 kinds of stationery at once in slice 5.
+- **Good-enough encryption**: for a friend-group scenario, `tweetnacl box` + secure-store is enough;
+  forward secrecy, multi-device, and group protocols are all "later" or "not at all."
+- **Borrow ready-made wheels**: use libraries for lunar calendar, animation, and push; **only the encryption layer should be written yourself**, because that's what you most want to learn.
+- **Make only one cut**: the Go fan-out service is the only standalone service. Don't get addicted to splitting just because you learned how — don't carve out auth, Letter Mode, and media each into their own service —
+  that's falling into the microservices trap (see clarification 5). Everything else stays in the Node main backend.
+- **The Go service can be deferred or downgraded**: it's a learning/architecture slice, not a hard gate for v1.0. If time is tight,
+  group chat's transport fan-out **can perfectly well be done in Node first**, and extracted later when you want to learn Go — the product loses no features as a result.
+- **Translation can be deferred, externalization cannot**: Japanese/Chinese translations are all post-v1.0, but "strings go through resource files"
+  must be done from slice 1 — it's one of the few "don't do it now and the cost balloons later" decisions (see clarification 7).
+- **Tag a git tag at the end of each slice**, so a "working version" can always be found again.
+
+---
+
+## One-Sentence Summary
+
+> Horizontal layering means you see nothing on the phone for two months; vertical slices mean you have something usable every week.
+> The knowledge that sticks best is the knowledge that lights up on a friend's phone the moment it lands.
