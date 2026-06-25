@@ -28,8 +28,9 @@ Below, the goals are laid out across these four areas, each marked with a priori
 
 | Goal | Priority | Notes |
 | --- | --- | --- |
-| Invite-code registration | P0 | Already planned. |
-| **Key recovery / backup** | **P0** | **The most important new goal.** After switching phones / reinstalling, be able to recover identity and read history. Approach below. |
+| Invite-code registration | P0 | Already planned. Collects an invite code, a public key, and a username only — **no phone/email** (see Section VI). |
+| **Key-based / passwordless login** | **P0** | **Identity is a keypair, not a username+password.** No server-side password at all. Day-to-day access is gated by a local PIN/biometric app lock; the server authenticates the device by **challenge-response** (it sends a nonce, the client signs it with the private key, the server verifies against the stored public key and issues a JWT). New device = enter the recovery phrase = re-derive the keypair = log in. Login flow and recovery flow are literally the same path. See ROADMAP slice 2. |
+| **Key recovery / backup** | **P0** | **The most important new goal.** After switching phones / reinstalling, be able to recover identity and read history. Approach below. The recovery phrase is the single master secret (it also *is* the new-device login). |
 | Safety number / public-key fingerprint verification | P1 | The two parties verify a string of fingerprints offline to confirm no one is impersonating in the middle — the final link of E2EE trust. |
 | Multi-device | P2 | True multi-device sync is hard; start with "one person, one device" and revisit later. |
 | Rename / avatar / bio | P1 | Otherwise the contact list is just a string of IDs and you can't tell who's who. |
@@ -48,17 +49,38 @@ The E2EE private key lives only on the device — lose it and nothing can be dec
 
 | Goal | Priority | Notes |
 | --- | --- | --- |
-| One-on-one / group real-time send & receive | P0 | Already planned. Group chat starts with per-recipient encryption fan-out. |
+| One-on-one / group real-time send & receive | P0 | Already planned. **Small-scale groups only: hard cap of 30 members per group.** Group chat uses per-recipient encryption fan-out (one ciphertext encrypted per member with their own public key), so per-message work grows linearly with group size — the cap is a deliberate trade-off, not a temporary limit. See Section II-bis and ROADMAP slice 6. |
 | Offline delivery (store-and-forward) | P0 | If the other party is offline, deliver when they come online. Already in slice 2. |
-| Sent/delivered/read status | P1 | Already planned. |
+| **Send-outcome status only — NO read receipts** | P1 | Messages show the **sender's own send result only**: sending → sent (success) / failed → resend. **Read receipts are never shown, ever** — the recipient's reading activity is private and never reported back. Recipient-side "delivered to their device" indicators are likewise off, since they also leak when the other person is active; the only signal is "did *my* send succeed." This is a deliberate privacy choice, not a missing feature. See Section VI and the won't-do list. |
 | Images / voice / video | P1 | Media is client-encrypted before uploading to R2. Voice is a high-frequency must-have, prioritized over video. |
 | **Quote reply / @mention** | **P1** | Without quote reply, group chats are basically unusable. |
 | **Reactions** | P1 | Low cost, high return; greatly improves the everyday feel. |
 | Unsend / delete message | P1 | Wanting to recall a typo is a must-have (except in Letter Mode, which is deliberately irreversible). |
 | Forward message | P2 | |
-| Burn-after-reading / timed disappearing | P1 | Already planned. |
+| **Global message expiry (everything is ephemeral)** | **P0** | **Every message carries an expiry time; once it passes, the message is deleted everywhere — both devices and the server.** There is no "keep forever" option. Burn-after-reading and per-conversation custom timers are stricter variants of this same mechanism. See Section II-bis. |
 | Screenshot alert | P2 | Already planned, a nice-to-have. |
 | **"Typing…" indicator** | P2 | A small detail, but adds a strong "live person" feel. |
+
+---
+
+## II-bis. Two hard product boundaries (write them down so they never drift)
+
+These two are not "features" but **load-bearing constraints** — every other decision in Chat Mode has to respect them.
+
+### 1. Small-scale groups only — hard cap of 30 members
+
+- **The cap is 30 members per group, enforced server-side** (creating/joining beyond 30 is rejected).
+- **Why a cap exists at all:** group E2EE here is per-recipient encryption fan-out — the sender encrypts one copy of every message for each member with that member's own public key. Work and bandwidth per message grow **linearly** with group size, all on the sender's phone. Beyond ~30 this becomes painful (a single image fans out into 30 encrypted copies), so the cap is the honest edge of the chosen design, not a placeholder for "scale later."
+- This keeps us out of the group-protocol rabbit hole (MLS / sender keys are on the won't-do list) while staying genuinely end-to-end encrypted.
+- **Group-message consistency:** because each member receives a *separately encrypted* copy, a malicious sender could in principle send different members different content. The sender includes a hash of the **plaintext** inside every per-recipient copy; receivers compare it so everyone can confirm they got the same message. (Mirrored in ROADMAP slice 6.)
+
+### 2. Everything is ephemeral — every message has an expiry
+
+- **Every message (Chat Mode) carries an expiry timestamp. When it passes, the message is deleted on both devices and purged from the server.** There is no "store forever."
+- **Maximum lifetime is one month (30 days) — a hard ceiling no message can exceed.** Within that, the expiry is **adjustable per conversation** (range 1 day → 1 month), with a 7-day default. Burn-after-reading is just the shortest setting; there is no setting for "never" and none longer than a month.
+- **Deletion is real, not hidden:** the client drops it from local storage and the server hard-deletes the ciphertext row (or never stores past the TTL). Expiry must survive app restarts and offline periods (check on launch + a periodic sweep), so a message can't outlive its deadline just because the app was closed.
+- **Interaction with key recovery (Section I):** encrypted history backup only ever contains **not-yet-expired** messages; expired content is never resurrected on a new device.
+- **Letter Mode is the deliberate exception** — a letter is meant to be kept; its lifecycle (seal → deliver → optionally burn) is governed by Section III, not by this global timer.
 
 ---
 
@@ -110,11 +132,20 @@ The E2EE private key lives only on the device — lose it and nothing can be dec
 | Goal | Priority | Notes |
 | --- | --- | --- |
 | Server stores only ciphertext + public keys | P0 | A fundamental principle of the project, already planned. |
+| **No personal identifiers collected** | **P0** | Registration never asks for a phone number or email — only an invite code, a public key, and a chosen username (a handle, not PII). A "don't ever add it" discipline enforced from day one, not a later feature. |
+| **No third-party trackers / analytics SDKs** | **P0** | The app ships no third-party analytics or tracking SDKs that phone home. Any diagnostics stay self-hosted (e.g. self-managed Sentry). Otherwise a single tracking SDK quietly undoes the whole privacy posture. |
+| **Global message expiry (everything is ephemeral)** | **P0** | Every message has an expiry; past it, it is deleted on both devices and purged from the server. Hard ceiling of one month (30 days) — no message can live longer; per-conversation adjustable down from there (1 day → 1 month, 7-day default), no "never" option. Full design in Section II-bis. Privacy payoff: a seized phone or server holds at most one expiry window of content. |
+| **Safety number / public-key fingerprint verification** | **P0** (was P1) | The weakest link in this E2EE design is the moment a public key is uploaded — a malicious server could hand out a key it controls (man-in-the-middle). Without offline fingerprint comparison (scan a QR / read out a number string), the whole encryption chain is only as trustworthy as the server. Promoted to P0. See Section I. |
+| **Public-key-change alert (TOFU)** | **P0** | Trust-on-first-use: pin a contact's key on first contact; if it later changes (they switched phones — or someone swapped it), show a loud "⚠️ this contact's safety number changed" warning before the next message goes out. Without this, a server can rotate in a key it controls and you'd never notice. |
 | App lock (PIN / biometrics) | P1 | Unlocking is required to open the app, so even if the phone is taken, the content can't be seen. |
-| Metadata minimization | P1 | Record as little as possible about who contacted whom and when; logs keep no readable content. |
+| **Encrypted local storage at rest** | P1 | The on-device message cache and the private key must be encrypted at rest (SQLCipher / encrypted MMKV + `expo-secure-store` for the key), so an unlocked, seized phone doesn't expose plaintext history. Pairs with App lock. |
+| **Push payloads carry no content** | P1 | Pushes say only "you have a new message / a letter arrived" — never message text or sender-revealing detail in the payload, since the push provider (Expo/FCM) can read it. |
+| **Backup-passphrase brute-force resistance** | P1 | The encrypted key/history backup (Section I) is unlocked by a recovery phrase. Use a high-entropy mnemonic (e.g. BIP39 12 words) + a slow KDF (Argon2id) so a server holding the backup ciphertext can't offline-guess the passphrase. Write the threat model down. |
+| **No read / activity receipts** | P1 | The recipient's reading and presence is never signalled to the sender — no read receipts, no "delivered to their device" ticks. The sender only ever sees their own send outcome (sent / failed). Reduces the activity metadata the app produces in the first place. See Section II. |
+| Metadata minimization | P1 | Record as little as possible about who contacted whom and when; logs keep no readable content. **Known unavoidable leak:** group membership (who is in which group) reveals social graph; we accept it at friend-circle scale but list it honestly here rather than pretending it's hidden. |
+| Certificate pinning (transport) | P1 | Pin the server's TLS certificate so a hostile network / middlebox can't silently downgrade or MITM the transport layer beneath the E2EE. |
 | Basic abuse protection | P1 | Even under the invite system, have rate limiting / brute-force protection to safeguard a small server. |
-| Safety number verification | P1 | See Section I; prevents man-in-the-middle. |
-| End-to-end "deleted means deleted" | P2 | Unsend / burn should truly delete on both parties' devices, not merely hide. |
+| End-to-end "deleted means deleted" | P2 | Unsend / burn should truly delete on both parties' devices, not merely hide. Subsumed by the global-expiry mechanism above. |
 
 ---
 
@@ -147,6 +178,23 @@ The E2EE private key lives only on the device — lose it and nothing can be dec
 
 ---
 
+## IX. Post-v1.0 optional privacy / learning experiments (not on the main line)
+
+> These are **not v1.0 gates and not part of the core slices.** They're "do it after v1.0 ships, for the learning and the privacy bump." Each is self-contained and can be skipped with zero feature loss. Listed roughly cheapest-first.
+
+> (Two items that started here — "no identifiers at registration" and "no third-party trackers" — were promoted to **P0 core discipline** in Section VI, because they are "don't ever add it" rules to hold from day one, not things to bolt on after v1.0.)
+
+| Experiment | Cost | What it buys | Notes |
+| --- | --- | --- | --- |
+| **Ciphertext length padding** | low | Pad every message to fixed-size buckets before encrypting, so ciphertext size doesn't leak message length. | Cheap, real metadata win; pairs naturally with E2EE. |
+| **Account / data self-deletion** | low | A user can wipe their account + all their server-side ciphertext on demand ("right to be forgotten"). | Good privacy hygiene and simple to build. |
+| **Duress / panic unlock** | low–med | A second "duress" PIN that opens an empty or decoy state, or instantly wipes local data, if forced to unlock. | High emotional value for a privacy app; client-only. |
+| **Tor hidden service (.onion)** | med | The server runs as a Tor onion service; clients connect over Tor, hiding **user IP / location** from the server and the network. | The lightest taste of "anonymity network" without rewriting any protocol — just a deployment + transport change. A genuine learning project. |
+
+> Heavier anonymity (mix networks, sealed sender, PIR) stays on the won't-do list below — those rewrite the delivery protocol and trade away the realtime feel for a threat model a friend-circle app doesn't need.
+
+---
+
 ## Explicit "Won't-do" list (holding the boundary of a friend-circle app)
 
 Writing these down is to **prevent the project from becoming a second Signal and never shipping**:
@@ -155,10 +203,12 @@ Writing these down is to **prevent the project from becoming a second Signal and
 - ❌ **A true group encryption protocol (MLS / sender keys)**: per-recipient fan-out is already enough for small groups.
 - ❌ **Real-time multi-device sync**: one person, one device + recovery phrase already covers the phone-switching scenario.
 - ❌ **Federation / decentralization / self-hosted distribution**: one server shared among friends is enough.
+- ❌ **Heavy anonymity networks (mix networks, sealed sender, PIR)**: these rewrite the delivery protocol and trade away realtime feel for a global-passive-adversary threat model a friend-circle app doesn't need. (A *lightweight* Tor onion-service deployment is allowed as a post-v1.0 experiment — see Section IX — because it changes only transport, not the protocol.)
 - ❌ **Public registration / user discovery / stranger social**: the invite system is the founding intent; don't touch growth.
 - ❌ **Bots / mini-programs / payments / social feed**: not building a platform, only communication.
 - ❌ **Machine / automatic translation of message content**: under E2EE the server can't read plaintext, so translation can only be done on-device and is not a core need; i18n **only localizes the UI shell**, not user messages.
 - ❌ **RTL (right-to-left, e.g. Arabic/Hebrew) layout**: the first batch of languages en/ja/zh are all LTR; don't invest in RTL adaptation for now.
+- ❌ **Read receipts / "delivered to recipient" indicators**: the recipient's reading and online activity is never reported back to the sender. The only status shown is the sender's own send outcome (sent / failed). A deliberate privacy choice — see Section II and VI.
 
 > Whenever you want to add a new feature, first ask: **"Will my few friends delete the app because it's missing?"** If not, it goes to P2 or won't-do.
 
@@ -174,7 +224,10 @@ When every line below is true, the app goes from a "learning project" to "a genu
 - [ ] In groups you can quote-reply, @, and drop a reaction.
 - [ ] He can write a letter, set it to "deliver tomorrow," and the next day you **receive a push and open it**.
 - [ ] He can search for that thing said last week, mute a noisy group, and add a lock to the app.
-- [ ] Kill the process, and new-message pushes still pop up.
+- [ ] Kill the process, and new-message pushes still pop up (and the push payload contains no message content).
+- [ ] A message past its expiry is gone from both phones **and** the server — verified by querying the database directly — and stays gone across app restarts.
+- [ ] A group is capped at 30 members (the 31st is rejected), and three phones in one group all confirm the same group-message consistency hash.
+- [ ] When a contact's public key changes, the other side sees a safety-number-changed warning before the next message is sent.
 - [ ] At any load/error point, the screen shows a **plain-language message** rather than a white screen and spinner.
 - [ ] All UI copy goes through i18n resource files (English complete, no hardcoded strings); **dropping in a temporary Japanese translation switches the whole screen without breaking**, proving that ja/zh is "adding files" rather than "rewriting."
 

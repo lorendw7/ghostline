@@ -65,6 +65,11 @@
    ② Letter Mode's **solar terms / lunar dates / seals are cultural content to preserve, not UI strings to translate away**
    (in English, present them as "`Grain in Ear (芒种)`" — an "English label + (original)" style).
 
+8. **Why key-based login instead of username+password — and what the recovery phrase actually is.**
+   The login model is **passwordless / key-based**: identity *is* a keypair, the server holds no password, and authentication is challenge-response (server sends a nonce, client signs it with the private key, server verifies against the stored public key → JWT). New device = enter the recovery phrase = re-derive the keypair = log in. (Full flow in slice 2 / GOALS Section I.)
+   **Why not the "real-world" username+password?** Mainstream apps (WeChat/WhatsApp/etc.) use phone-number+password because they want to *find people* (the identifier powers social discovery + growth) and because **their servers can read your data**, so "prove you own the account" = "let you read server-side data." Both are reversed here: this app is invite-only / anti-growth, and **the server can read nothing (E2EE)** — so a server password protects nothing (without the private key you decrypt nothing anyway). The apps that take privacy seriously already move this way: **Signal** leans on a device key + recovery PIN, **encrypted wallets** use a mnemonic and have no account password at all. Username+password is an artifact of the "server holds your data" era; once the server holds only ciphertext, "prove you possess the private key" *replaces* "tell the server your password." We keep a **username purely as a human-readable handle** for friends to add you — never as a login credential, never PII.
+   **The recovery phrase = a BIP39 mnemonic, not a random digit/letter string.** 12 English words drawn from the fixed 2048-word BIP39 list (128 bits of entropy). Words (not `aB3$xK9…`) because a human must hand-copy it to paper and type it back: lower transcription error, and the last word is a **checksum** so a mistyped word is rejected immediately. Use a ready-made library (`bip39`) — don't roll your own; only the encryption core is hand-written. English wordlist first (ja/zh wordlists exist, optional later). The phrase surfaces only twice — at registration and at new-device recovery; day-to-day access is a local PIN/biometric, so users rarely face the 12 words.
+
 ---
 
 ## Slice Roadmap (each slice ends with "something you can verify on the phone")
@@ -93,13 +98,18 @@
 ---
 
 ### Slice 2 · Identity and persistence (week 2)
+> **Login model: key-based / passwordless (no username+password).** Your identity *is* a keypair; there is no server-side password. This is the honest E2EE model and it stays consistent with "server stores only ciphertext + public keys, collects no personal identifiers." See GOALS Section I.
+
 **What to do**
-- Account registration/login (username + password → JWT), invite code validation.
-- Connect Supabase (Postgres), store a users table + a messages table.
+- **Registration**: validate the invite code → pick a username (a handle for friends to find you, **not** a login credential, not PII) → the client generates the keypair and a recovery phrase (mnemonic) → upload only the **public key** + username; the private key goes to `expo-secure-store`. The user copies down the recovery phrase.
+- **Server authentication = challenge-response, not a password**: the server sends a random nonce, the client **signs it with its private key**, the server verifies against the stored public key and issues a JWT. No password is ever sent to or stored on the server.
+- **Daily access**: the device stays authenticated; opening the app is gated by a **local PIN / biometrics** (an app lock that never leaves the device), not a server login.
+- **New device = recovery = login (one and the same)**: entering the recovery phrase deterministically re-derives the same keypair locally, which then authenticates via the same challenge-response. (Full recovery design in GOALS Section I.)
+- Connect Supabase (Postgres), store a users table (username + public key, **no password hash, no phone/email**) + a messages table.
 - Offline messages: when the other party is offline, store to the database and re-deliver when they come online (store-and-forward).
 
-**Verify**: messages aren't lost when the service restarts; a message sent while the other party is offline is received when they come online.
-**What you learn**: the JWT auth flow, SQL table design, invite-code logic, the offline delivery pattern.
+**Verify**: messages aren't lost when the service restarts; a message sent while the other party is offline is received when they come online; logging in on a second device with only the recovery phrase works, and the server's users table holds no password and no personal identifiers.
+**What you learn**: challenge-response auth + JWT, deterministic key derivation from a mnemonic, SQL table design, invite-code logic, the offline delivery pattern.
 
 ---
 
@@ -117,13 +127,13 @@
 
 ### Slice 4 · Polishing the chat experience (weeks 5–6)
 **What to do**
-- Message status: sent / delivered / read.
+- Message status: **send outcome only — sending / sent / failed → resend. No read receipts and no recipient-side "delivered" indicators** (a deliberate privacy choice — the recipient's activity is never reported back; see GOALS Section II & VI).
 - Presence, unread counts: connect Upstash Redis (in the one-on-one phase, do presence in Node first — simple and sufficient;
   in slice 6 you'll migrate it, together with group-chat fan-out, into the standalone Go service, and that's when you'll grasp "why split it out").
 - Image messages: upload to Cloudflare R2 (note: media must also be client-side encrypted before upload).
 - Push: get "you have a new message" working with Expo Push.
 
-**Verify**: double-check marks / read receipts are correct; you still receive a push after killing the app.
+**Verify**: send-success / send-failed states are correct and a failed send can be resent (no read receipts appear anywhere); you still receive a push after killing the app.
 **What you learn**: the message state machine, using Redis for volatile state, object storage, the push pipeline.
 
 ---
@@ -168,6 +178,8 @@ Phone ──WebSocket──►  Go fan-out service (holds real-time connections 
 - Move presence into this service; Node publishes "deliver this ciphertext blob to group X" via Redis pub/sub, and Go subscribes and fans it out to online members.
 - Group chat: **encryption fan-out stays on the client** (encrypt one copy per member with their own public key, see clarification 4),
   Go only handles **transport fan-out** (distributing these ciphertexts to the online people); offline people still go through Node's store-and-forward.
+- **Enforce the 30-member group cap server-side** (reject create/join beyond it). The cap exists because per-recipient fan-out makes per-message work grow linearly with group size — this is the honest edge of the design, not a temporary limit. See GOALS Section II-bis.
+- **Group-message consistency hash:** since each member gets a separately encrypted copy, a malicious sender could send different members different content. Embed a hash of the **plaintext** in every per-recipient copy; receivers compare it to confirm everyone got the same message.
 
 **Verify**: create a 3-person group and have three phones send/receive in real time; Node and Go are two independent processes (restartable separately),
 decoupled via Redis; confirm in the database/logs that the Go service only ever handles ciphertext throughout.
