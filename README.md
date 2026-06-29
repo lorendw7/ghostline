@@ -26,9 +26,9 @@
 
 - End-to-end encrypted real-time messaging
 - Small-scale group chats (hard cap of 30 members)
-- Multimedia messages (images, voice, video)
+- Multimedia messages (images, voice, video) — **media auto-expires within 3 days**; you're reminded to download/save anything you want to keep
 - Bundled sticker / emoji packs (custom uploads later)
-- Everything is ephemeral — every message expires (hard ceiling of 1 month; burn-after-reading is the shortest setting)
+- Everything is ephemeral — every text message expires (hard ceiling of 1 month; burn-after-reading is the shortest setting); media is shorter still (3 days)
 - Send-outcome status only — sending / sent / failed → resend (**no read receipts, ever**)
 - Screenshot alerts (native only — browsers can't detect screenshots)
 
@@ -48,7 +48,7 @@
 - Share a photo to a chosen friend / small circle — **not a broadcast feed**
 - Built on "share and let go": **no likes, no comments, no read receipts, no reply obligation** — the absence of engagement mechanics is the point (no "saw it but didn't reply" pressure)
 - End-to-end encrypted via per-recipient fan-out (same 30-member cap as group chat)
-- Every shared photo auto-expires within a month — no permanent gallery
+- Every shared photo auto-expires within 3 days (save it yourself to keep) — no permanent gallery
 - Deliberately restrained — a quiet shared space, not an Instagram
 
 ---
