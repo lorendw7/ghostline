@@ -147,6 +147,22 @@ These two are not "features" but **load-bearing constraints** — every other de
 | Basic abuse protection | P1 | Even under the invite system, have rate limiting / brute-force protection to safeguard a small server. |
 | End-to-end "deleted means deleted" | P2 | Unsend / burn should truly delete on both parties' devices, not merely hide. Subsumed by the global-expiry mechanism above. |
 
+### VI-bis. What the server actually stores (the honest inventory)
+
+> A plain-language answer to "does the server keep my data?" — useful for explaining the privacy model to a friend. **Two rules hold across every row: the server only ever holds ciphertext + public data (it can decrypt nothing), and chat content is purged within a month.** What the server retains *long-term* is a tiny, non-readable, non-PII core.
+
+| What | Stored on server for how long | Readable by the server? |
+| --- | --- | --- |
+| **Chat messages** | **Not long-term** — auto-purged at expiry; hard ceiling 1 month, often much less (down to burn-on-read). Removed once delivered + expired. | No — ciphertext only. |
+| **Media** (images / voice / video) | Tied to the message's lifetime (≤ 1 month); stored on R2. | No — client-encrypted before upload. |
+| **Account record** (username + public key) | **Long-term** — kept while the account exists. | Public key is public by design; username is a handle, **not PII**. |
+| **Invite codes** | Long-term. | No sensitive content. |
+| **📜 Letters (Letter Mode)** | **Long-term by design — the deliberate exception to ephemerality** (a letter is meant to be kept). Delayed letters are held as ciphertext until `deliverAt`. | No — ciphertext only; "unlock at delivery" = the server releases the blob on a timer, it never decrypts (clarification 1). |
+| **Encrypted key/history backup** (optional, Section I) | Long-term, **as ciphertext**. | No — encrypted under a recovery-phrase-derived key; the server never sees the key. |
+| **Minimal metadata** (routing: who↔who, timestamps, group membership) | Minimized; logs keep no readable content. | This is the **known unavoidable leak** — see "Metadata minimization" above. Content stays unreadable; the *fact* of contact is what a relay server inevitably sees. |
+
+> **One-line summary:** the server is a **mailbox that holds only ciphertext and burns chat content within a month**; what it keeps long-term is just the unreadable minimum (public key + username + invite code) plus deliberately-kept letters (still ciphertext).
+
 ---
 
 ## VII. Experience Polish (decides "comfortable to use")
