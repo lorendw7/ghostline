@@ -46,8 +46,8 @@ Honest take: `tweetnacl box` + mnemonic recovery is **good enough** for a circle
 | Goal | Priority | Notes |
 | --- | --- | --- |
 | **Three environments: dev / staging / prod** | **P0** | Never experiment on the production database. Keep staging isomorphic to prod and verify there before releasing. |
-| Config-as-code / reproducible deployment | P1 | Write deployment steps as scripts or Railway/Render config so a new machine can be rebuilt with one click. |
-| **Centralized secret/credential management** | **P0** | Database passwords, JWT secret, and R2 credentials go into secret management (encrypted environment-variable storage) and **never into git**. |
+| Config-as-code / reproducible deployment | P1 | Write the whole stack as a **Docker Compose** file (Node + Go + Postgres + Redis + MinIO) so the self-hosted VPS can be rebuilt from scratch with one command. |
+| **Centralized secret/credential management** | **P0** | Database passwords, JWT secret, and MinIO/object-storage credentials go into secret management (encrypted environment-variable storage / Docker secrets) and **never into git**. |
 | Automated database migrations | P0 | Use a migration tool (e.g., Prisma Migrate / Drizzle) so schema changes are versioned and reversible. |
 | Health check endpoint | P1 | `/health` for monitoring liveness; the load balancer uses it to remove bad instances. |
 | Graceful shutdown | P1 | On restart/deploy, stop accepting new connections first, finish processing in-flight messages, then exit. |
@@ -71,10 +71,10 @@ Honest take: `tweetnacl box` + mnemonic recovery is **good enough** for a circle
 
 | Goal | Priority | Notes |
 | --- | --- | --- |
-| **Automated periodic backups + restore drills** | **P0** | A backup never tested = no backup. Periodically do a real restore to staging to verify. |
+| **Automated periodic backups + restore drills** | **P0** | A backup never tested = no backup. Periodically do a real restore to staging to verify. **Self-hosted on one VPS = a single point of failure**, so encrypted DB dumps must go **off-site to a different location** (e.g. Backblaze B2) — never only on the same box. |
 | Data retention and cleanup policy | P1 | Delivered-and-burned messages and expired media need a background job that truly deletes them, not just marks them. |
 | User data export / account deletion | P1 | When a friend asks "delete all my data," you must be able to fully execute it (in the spirit of GDPR). |
-| Media storage lifecycle | P1 | Orphaned files on R2 (message deleted but file remains) should be cleaned up periodically to control cost. |
+| Media storage lifecycle | P1 | Media auto-expires in 3 days; a background job must truly delete expired/orphaned files from self-hosted MinIO so they don't fill the VPS's local disk. |
 | Schema evolution without data loss | P0 | Migrations must be forward-compatible; old clients still work during the upgrade window. |
 
 ---

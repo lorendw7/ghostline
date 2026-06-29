@@ -83,11 +83,12 @@
 > decomposition and Go concurrency without the full overhead. It's deferrable and downgradable: group
 > fan-out can stay in Node first, and be extracted only when you want to learn Go.
 
-### Database / Storage
+### Database / Storage (all self-hosted on one VPS, via Docker Compose)
 
-- **PostgreSQL** or **MongoDB** —— primary database
-- **Redis (Upstash)** —— presence, unread counts, caching
-- **Cloudflare R2** —— images, voice, video, stationery assets
+- **PostgreSQL** —— primary database (self-hosted, not a managed service)
+- **Redis** —— presence, unread counts, caching, Node↔Go decoupling (self-hosted)
+- **MinIO** (S3-compatible) —— images, voice, video, stationery assets on local disk; bounded because media auto-expires in 3 days. S3 API means you can swap to a hosted bucket later by config alone.
+- **Off-site encrypted DB backups** (mandatory) —— the single VPS is a single point of failure; scheduled encrypted dumps go to a *different* location (e.g. Backblaze B2)
 
 ### Push
 
@@ -157,22 +158,23 @@ The app's primary language is **English**. i18n is driven by **practicality**:
 
 ---
 
-## Deployment (all free tier)
+## Deployment (self-hosted backend on one VPS + free static client)
 
 | Component | Platform |
 | --- | --- |
-| Web / PWA client | Vercel / Netlify / Cloudflare Pages (static, also the iOS install path) |
-| Backend | Railway |
-| Database | Supabase (PostgreSQL) |
-| Redis | Upstash |
-| File storage | Cloudflare R2 |
-| Push | Firebase FCM |
+| Web / PWA client | Vercel / Netlify / Cloudflare Pages (static, free, also the iOS install path) |
+| Backend (Node + Go) | **Self-hosted on one Xserver VPS (Tokyo)**, Docker Compose |
+| Database (PostgreSQL) | **Self-hosted on the same VPS** |
+| Redis | **Self-hosted on the same VPS** |
+| File storage | **Self-hosted MinIO** (S3-compatible) on the same VPS |
+| Off-site backups | Encrypted DB dumps to a different location (e.g. Backblaze B2) — mandatory |
+| Push | Firebase FCM (native) + Web Push (browser) |
 
 ---
 
 ## Release Plan (one codebase → mobile + desktop)
 
-One Expo / React Native codebase targets **iOS, Android, and Web** (the Web target via `react-native-web`). **Desktop is the Web build** — run in a browser or installed as a **PWA** — so there is no second codebase. An optional post-v1.0 **Tauri** native desktop app (chosen over Electron) wraps the same web build and can store the private key in the **OS keychain**, giving stronger key storage than the PWA. The backend needs always-on hosting (free tier is enough at friend scale; for long-term always-on use the chosen host is a single **Xserver VPS in Tokyo** — 2GB ~¥792/mo for ghostline alone, 6GB ~¥1,359/mo if it doubles as a multi-project box, Docker Compose + optionally Coolify); the mobile/desktop clients are just downloadable binaries that cost nothing to distribute.
+One Expo / React Native codebase targets **iOS, Android, and Web** (the Web target via `react-native-web`). **Desktop is the Web build** — run in a browser or installed as a **PWA** — so there is no second codebase. An optional post-v1.0 **Tauri** native desktop app (chosen over Electron) wraps the same web build and can store the private key in the **OS keychain**, giving stronger key storage than the PWA. The backend is **fully self-hosted on a single Xserver VPS in Tokyo** (Node + Go + PostgreSQL + Redis + MinIO via Docker Compose, optionally behind Coolify) — 2GB ~¥792/mo for ghostline alone, 6GB ~¥1,359/mo if it doubles as a multi-project box. One VPS is a single point of failure, so **off-site encrypted DB backups are mandatory**. The mobile/desktop clients are just downloadable binaries that cost nothing to distribute; the web/PWA client still hosts free on static hosting.
 
 | Platform | v1.0 (cost-free path) | Later (optional, paid) |
 | --- | --- | --- |
