@@ -1,6 +1,6 @@
 # Ghostline
 
-> An end-to-end encrypted private messaging app —— invite-only, built for private communication within close-knit circles of friends.
+> An end-to-end encrypted private messaging app —— invite-only, built for private communication within close-knit circles of friends. **One Expo codebase runs on web and mobile** (iOS / Android / browser + PWA), developed web-first.
 
 **Not just a private chat app, but a private *communication* app.** Two ways to express yourself, side by side:
 
@@ -25,11 +25,11 @@
 ### 💬 Chat Mode (Instant)
 
 - End-to-end encrypted real-time messaging
-- Group chats
+- Small-scale group chats (hard cap of 30 members)
 - Multimedia messages (images, voice, video)
-- Disappearing messages (burn after reading)
-- Sent / Delivered / Read status
-- Screenshot alerts
+- Everything is ephemeral — every message expires (hard ceiling of 1 month; burn-after-reading is the shortest setting)
+- Send-outcome status only — sending / sent / failed → resend (**no read receipts, ever**)
+- Screenshot alerts (native only — browsers can't detect screenshots)
 
 ### 📜 Letter Mode (Classical Correspondence)
 
@@ -46,15 +46,16 @@
 
 ## Tech Stack
 
-### Frontend
+### Frontend (one codebase → iOS / Android / Web)
 
-- **React Native (Expo)**
+- **React Native (Expo)** + **`react-native-web`** —— single codebase, three targets; the web build is also the desktop client (browser / PWA), developed web-first
 - `react-native-gifted-chat` —— chat mode UI
-- `tweetnacl-js` —— end-to-end encryption
-- `react-native-mmkv` —— encrypted local storage
-- `expo-screen-capture` —— screenshot detection
+- `tweetnacl-js` —— end-to-end encryption (runs identically in the browser and on native)
+- Local storage **per platform, behind an adapter** —— native: `react-native-mmkv` / `expo-secure-store` (Keychain/Keystore); web: IndexedDB + WebCrypto non-extractable key (weaker — see ROADMAP clarification 9)
+- `expo-screen-capture` —— screenshot detection (**native only**; a no-op on web)
 - `Zustand` —— state management
-- `react-native-reanimated` —— letter-opening / burning animations
+- `react-native-reanimated` —— letter-opening / burning animations (also targets web)
+- Push behind an adapter —— Expo Push (native) / Web Push API (browser)
 - `expo-localization` + `i18next` / `react-i18next` —— internationalization (English-first, ja/zh later)
 
 ### Backend
@@ -151,6 +152,7 @@ The app's primary language is **English**. i18n is driven by **practicality**:
 
 | Component | Platform |
 | --- | --- |
+| Web / PWA client | Vercel / Netlify / Cloudflare Pages (static, also the iOS install path) |
 | Backend | Railway |
 | Database | Supabase (PostgreSQL) |
 | Redis | Upstash |
@@ -159,11 +161,17 @@ The app's primary language is **English**. i18n is driven by **practicality**:
 
 ---
 
-## Release Plan
+## Release Plan (one codebase → mobile + desktop)
 
-- **Android** —— ship the APK directly to friends, $0 cost
-- **iOS** —— Apple Developer account $99/year, TestFlight beta then App Store
-- **Google Play** —— $25 one-time fee (optional)
+One Expo / React Native codebase targets **iOS, Android, and Web** (the Web target via `react-native-web`). **Desktop is the Web build** — run in a browser or installed as a **PWA** — so there is no second codebase. An optional post-v1.0 **Tauri** native desktop app (chosen over Electron) wraps the same web build and can store the private key in the **OS keychain**, giving stronger key storage than the PWA. The backend needs always-on hosting (free tier is enough at friend scale; for long-term always-on use the chosen host is a single **Xserver VPS in Tokyo** — 2GB ~¥792/mo for ghostline alone, 6GB ~¥1,359/mo if it doubles as a multi-project box, Docker Compose + optionally Coolify); the mobile/desktop clients are just downloadable binaries that cost nothing to distribute.
+
+| Platform | v1.0 (cost-free path) | Later (optional, paid) |
+| --- | --- | --- |
+| **Android** | EAS Build → ship the APK directly to friends, **$0** | Google Play, **$25 one-time** |
+| **iOS** | **PWA** installed from Safari ("Add to Home Screen") — **no App Store, so no fee**; or sideload to your own device with a free Apple personal team (7-day re-sign) | Apple Developer **$99/year** → TestFlight → App Store, only when you want a polished native install |
+| **Desktop** | **Web build / PWA**, free hosting (Vercel / Netlify / Cloudflare Pages) | **Tauri** native app (chosen over Electron — ~3–10MB, uses the OS keychain → stronger key storage than the PWA) |
+
+> **⚠️ Web/desktop E2EE caveat:** browsers have no iOS Keychain / Android Keystore, so `expo-secure-store` is unavailable there. On Web the private key can only live in the browser (WebCrypto **non-extractable** key in IndexedDB — never plaintext localStorage), which is **weaker than the native OS keystore** (larger XSS surface). The Web/desktop client is therefore positioned as a **convenience client**; the most sensitive use is still recommended on the native mobile app. MMKV, screenshot detection, and FCM push also need Web-specific fallbacks (IndexedDB, Web Push). See ROADMAP clarification 9.
 
 ---
 

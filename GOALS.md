@@ -160,6 +160,7 @@ These two are not "features" but **load-bearing constraints** — every other de
 | Consistent design language | P1 | A unified visual of classical + modern, not a patchwork. |
 | **English-first + string externalization (i18n-ready)** | **P0** | The app's primary language is English; from slice 1, all user-visible strings go through i18n resource files (`expo-localization` + `i18next`), **not hardcoded**. This is P0 not because we need multiple languages now, but because **the cost of adding translations later depends on whether they were externalized now** — externalized, adding a language = adding a JSON; hardcoded, it's a full rewrite. |
 | Japanese / Chinese translation | P1 | After v1.0, add in the order **English → 日本語 → 中文**. Auto-select following the system language, with a manual switch on the settings page; missing keys fall back to English. Format dates/numbers per locale with `Intl`; leave plural rules to the i18n library (English has singular/plural, ja/zh don't). |
+| **Responsive web / desktop layout** | P1 | The same Expo codebase renders in a browser (desktop & mobile widths) and as a phone app. Layouts must adapt to wide desktop viewports (not just a stretched phone column), and platform-only affordances degrade gracefully on web (e.g. screenshot alerts are a native-only no-op). See ROADMAP clarification 9. |
 | Accessibility / font-size adaptation | P2 | Don't hardcode widths for i18n copy — German/Japanese lengths vary widely, so the layout must adapt. |
 | Haptic feedback (haptics) | P2 | Vibration on sealing and burning a letter maxes out the sense of ceremony. |
 
@@ -186,6 +187,7 @@ These two are not "features" but **load-bearing constraints** — every other de
 
 | Experiment | Cost | What it buys | Notes |
 | --- | --- | --- | --- |
+| **Tauri native desktop client** | med | Wraps the existing `react-native-web` build in a tiny (~3–10MB) native window (Win/Mac/Linux) via the OS WebView + a Rust backend. **Crucially, it can store the private key in the OS keychain** (macOS Keychain / Windows Credential Manager-DPAPI / Linux Secret Service) — **stronger than the PWA's browser storage**, pulling desktop back up toward native-mobile security. | **Chosen over Electron** (1/10th the size, safer defaults, a bit of Rust to learn). Same codebase — only the `secureStore` adapter gets a desktop (Rust keychain) impl, a seam already reserved in slice 0. Caveat: Tauri uses the per-OS system WebView, so render/behaviour must be checked on each target OS. Distributed as a downloadable binary — needs no hosting (only the shared backend). |
 | **Ciphertext length padding** | low | Pad every message to fixed-size buckets before encrypting, so ciphertext size doesn't leak message length. | Cheap, real metadata win; pairs naturally with E2EE. |
 | **Account / data self-deletion** | low | A user can wipe their account + all their server-side ciphertext on demand ("right to be forgotten"). | Good privacy hygiene and simple to build. |
 | **Duress / panic unlock** | low–med | A second "duress" PIN that opens an empty or decoy state, or instantly wipes local data, if forced to unlock. | High emotional value for a privacy app; client-only. |
@@ -228,6 +230,7 @@ When every line below is true, the app goes from a "learning project" to "a genu
 - [ ] A message past its expiry is gone from both phones **and** the server — verified by querying the database directly — and stays gone across app restarts.
 - [ ] A group is capped at 30 members (the 31st is rejected), and three phones in one group all confirm the same group-message consistency hash.
 - [ ] When a contact's public key changes, the other side sees a safety-number-changed warning before the next message is sent.
+- [ ] The same codebase runs as a **desktop/mobile web app (installable PWA, no Apple fee)** and as a native mobile app, with the web client honestly marked as a convenience client (weaker key storage).
 - [ ] At any load/error point, the screen shows a **plain-language message** rather than a white screen and spinner.
 - [ ] All UI copy goes through i18n resource files (English complete, no hardcoded strings); **dropping in a temporary Japanese translation switches the whole screen without breaking**, proving that ja/zh is "adding files" rather than "rewriting."
 
