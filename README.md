@@ -20,13 +20,14 @@
 
 ---
 
-## Two Core Modules
+## Core Modules
 
 ### 💬 Chat Mode (Instant)
 
 - End-to-end encrypted real-time messaging
 - Small-scale group chats (hard cap of 30 members)
 - Multimedia messages (images, voice, video)
+- Bundled sticker / emoji packs (custom uploads later)
 - Everything is ephemeral — every message expires (hard ceiling of 1 month; burn-after-reading is the shortest setting)
 - Send-outcome status only — sending / sent / failed → resend (**no read receipts, ever**)
 - Screenshot alerts (native only — browsers can't detect screenshots)
@@ -41,6 +42,14 @@
 - Burn-after-reading (with a paper-burning animation)
 - Solar-term timestamps (“癸卯年 芒种” instead of a numeric time)
 - Delivery push notifications (“You received a letter from XX”)
+
+### 📷 Moments (Quiet Photo Sharing · name “见影” tentative · post-Letter feature)
+
+- Share a photo to a chosen friend / small circle — **not a broadcast feed**
+- Built on "share and let go": **no likes, no comments, no read receipts, no reply obligation** — the absence of engagement mechanics is the point (no "saw it but didn't reply" pressure)
+- End-to-end encrypted via per-recipient fan-out (same 30-member cap as group chat)
+- Every shared photo auto-expires within a month — no permanent gallery
+- Deliberately restrained — a quiet shared space, not an Instagram
 
 ---
 

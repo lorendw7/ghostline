@@ -54,7 +54,8 @@ The E2EE private key lives only on the device — lose it and nothing can be dec
 | **Send-outcome status only — NO read receipts** | P1 | Messages show the **sender's own send result only**: sending → sent (success) / failed → resend. **Read receipts are never shown, ever** — the recipient's reading activity is private and never reported back. Recipient-side "delivered to their device" indicators are likewise off, since they also leak when the other person is active; the only signal is "did *my* send succeed." This is a deliberate privacy choice, not a missing feature. See Section VI and the won't-do list. |
 | Images / voice / video | P1 | Media is client-encrypted before uploading to R2. Voice is a high-frequency must-have, prioritized over video. |
 | **Quote reply / @mention** | **P1** | Without quote reply, group chats are basically unusable. |
-| **Reactions** | P1 | Low cost, high return; greatly improves the everyday feel. |
+| **Reactions** | P1 | Low cost, high return; greatly improves the everyday feel. (Note: reactions live in *Chat* only — the Moments photo surface in III-bis deliberately has none.) |
+| **Stickers / emoji packs** | P1 | Start with **app-bundled sticker sets** — sending a sticker only transmits a small sticker ID, so it is near-zero-cost and clean under E2EE (no media encrypt/upload). **User-uploaded custom stickers are P2/later** (those need client-encrypt + R2 upload like any media). |
 | Unsend / delete message | P1 | Wanting to recall a typo is a must-have (except in Letter Mode, which is deliberately irreversible). |
 | Forward message | P2 | |
 | **Global message expiry (everything is ephemeral)** | **P0** | **Every message carries an expiry time; once it passes, the message is deleted everywhere — both devices and the server.** There is no "keep forever" option. Burn-after-reading and per-conversation custom timers are stricter variants of this same mechanism. See Section II-bis. |
@@ -95,6 +96,29 @@ These two are not "features" but **load-bearing constraints** — every other de
 | Letter drafts | P1 | A letter is "written seriously"; you need to be able to save a half-written draft. |
 | Letter collection / letter-box archive | P2 | Storing treasured letters separately has emotional value. |
 | Reply quoting the original letter | P2 | The back-and-forth feel of correspondence. |
+
+---
+
+## III-bis. Moments — quiet, no-pressure photo sharing (third surface, name "见影" tentative)
+
+> A third surface beside Chat and Letters, built on one design principle: **"share and let go."** A photo goes into a quiet shared space that creates **no "they saw it but didn't reply" debt**. It is deliberately stripped of every engagement mechanic — that absence *is* the feature, the same way Letter Mode's restraint is its soul.
+
+**What it deliberately does NOT have (the point):**
+- ❌ **No likes / reactions / comments** — kills social-metric pressure and one-upmanship.
+- ❌ **No read receipts** — already a global rule (Section VI); nobody can see who looked.
+- ❌ **No reply obligation** — a shared photo is "being present," not a message awaiting an answer. It never appears in Chat and never produces an unread badge that demands action.
+
+**What it is:**
+
+| Goal | Priority | Notes |
+| --- | --- | --- |
+| Share a photo to a chosen **friend / small circle** | P1 | Audience is picked per share (one friend or a small circle), **not broadcast to all**. Keeps it intimate, not a "social platform." |
+| **E2EE via per-recipient fan-out** | P0 (if built) | Photos are client-encrypted before upload to R2 and fanned out per recipient public key — the *same* mechanism as group chat (II-bis), so the **30-member cap and the plaintext-consistency hash apply equally**. The server only ever stores ciphertext. |
+| **≤ 1-month auto-expiry** | P0 (if built) | Shared photos obey the global ephemerality ceiling — auto-deleted from both devices and the server within a month (Section II-bis). No permanent gallery. |
+| No engagement mechanics | P0 (if built) | No likes/comments/reactions/read-state, by design. Don't add them "because every app has them." |
+| Quiet, separate surface | P1 | Its own tab; viewing is passive and private. No counters, no "X new" pressure — at most a subtle "there's something new" hint. |
+
+> **Scope discipline:** this is a *restrained* third mode, like Letters — resist turning it into an Instagram. If a proposed addition would create comparison, obligation, or a metric, it belongs on the won't-do list. **Sequencing:** it reuses media-encryption (slice 4) and group fan-out (slice 6), so it naturally lands *after* those — a post-Letter / post-v1.0 feature, not an early slice.
 
 ---
 
@@ -224,6 +248,7 @@ Writing these down is to **prevent the project from becoming a second Signal and
 - ❌ **Heavy anonymity networks (mix networks, sealed sender, PIR)**: these rewrite the delivery protocol and trade away realtime feel for a global-passive-adversary threat model a friend-circle app doesn't need. (A *lightweight* Tor onion-service deployment is allowed as a post-v1.0 experiment — see Section IX — because it changes only transport, not the protocol.)
 - ❌ **Public registration / user discovery / stranger social**: the invite system is the founding intent; don't touch growth.
 - ❌ **Bots / mini-programs / payments / social feed**: not building a platform, only communication.
+- ❌ **Engagement mechanics on Moments (III-bis): likes, comments, public follower feed, view counts, "streaks"**: the no-pressure quiet-sharing model *is* the feature; any metric or comparison turns it into an Instagram and is explicitly off-limits.
 - ❌ **Machine / automatic translation of message content**: under E2EE the server can't read plaintext, so translation can only be done on-device and is not a core need; i18n **only localizes the UI shell**, not user messages.
 - ❌ **RTL (right-to-left, e.g. Arabic/Hebrew) layout**: the first batch of languages en/ja/zh are all LTR; don't invest in RTL adaptation for now.
 - ❌ **Read receipts / "delivered to recipient" indicators**: the recipient's reading and online activity is never reported back to the sender. The only status shown is the sender's own send outcome (sent / failed). A deliberate privacy choice — see Section II and VI.
