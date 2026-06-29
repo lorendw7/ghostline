@@ -80,6 +80,14 @@
    **The Apple cost:** putting an app on an iPhone (even via TestFlight) needs the Apple Developer Program, **$99/year**. To avoid paying up front: ship iOS as a **PWA** ("Add to Home Screen" in Safari installs it with **no App Store, no fee**), or sideload to your *own* device with a free Apple personal team (7-day re-sign). Pay the $99 only when you want a polished App Store / TestFlight install. Android stays free (EAS APK straight to friends; Google Play optional $25 one-time). The web/PWA hosts free on Vercel / Netlify / Cloudflare Pages.
    **⚠️ E2EE caveat — say it honestly in-product:** the web client's key storage is weaker than native (clarification 2). Position web/desktop as a **convenience client**; the most sensitive use stays on the native mobile app, and the UI should say so rather than implying all platforms are equal.
 
+10. **Media/message compression — a self-study track (you write the code). Compress BEFORE you encrypt, and don't blanket-prefer lossless.**
+   - **Order is non-negotiable: compress → encrypt → upload.** Ciphertext is ~random and **incompressible**, so compressing after encryption does nothing. All compression runs client-side on plaintext, before the `nacl.box`.
+   - **Lossless vs lossy — be honest about photographs.** Lossless (PNG / WebP-lossless) is right for **text, screenshots, line-art, logos, charts** (flat regions compress well). For actual **camera photos** lossless is often *huge* — sometimes bigger than the source — while high-quality **lossy** (WebP / AVIF at q≈80–90) is a fraction of the size at imperceptible loss. With the ≤1-month ephemeral model + free R2 tier, blanket lossless wastes bandwidth and storage. **Policy: lossy WebP/AVIF for camera photos, lossless for graphics/screenshots — choose per content type, not a blanket rule.** ("Prefer lossless *where it's actually appropriate*.")
+   - **Security caveat (CRIME/BREACH family) — ties to GOALS IX padding.** Compress-then-encrypt makes ciphertext *length* depend on content compressibility, which can leak information. Low risk for a friend messenger (no attacker-mixed secrets), but it's exactly why the optional **ciphertext-length padding** (GOALS IX) must pad **after** compression. Understand the interaction rather than just bolting one on.
+   - **Don't compress tiny text messages.** Per-message gzip header overhead usually costs more than it saves on short strings, and it adds the length-leak surface. Compress large blobs/media, not one-liners.
+   - **Cross-platform via the media adapter (clarification 9).** Resize/transcode runs client-side: web (`createImageBitmap` / Canvas / browser WebP-AVIF encoders) and native (`expo-image-manipulator`), behind the same seam as everything else.
+   - **Self-study reading list (hands-on > reading):** general lossless — DEFLATE (LZ77 + Huffman) → zstd / brotli / LZ4; image lossy — JPEG (DCT + chroma subsampling + quantization) → WebP → AVIF (AV1 intra) → JPEG-XL; image lossless — PNG (filters + DEFLATE), WebP-lossless; entropy coding — Huffman → arithmetic → ANS. **Do:** run `zstd` at several levels and measure size/time, or hand-write a toy DEFLATE — that's where it sticks.
+
 ---
 
 ## Slice Roadmap (web-first: each slice ends with "something you can verify in the browser, then on the phone")
@@ -141,11 +149,11 @@
 - Message status: **send outcome only — sending / sent / failed → resend. No read receipts and no recipient-side "delivered" indicators** (a deliberate privacy choice — the recipient's activity is never reported back; see GOALS Section II & VI).
 - Presence, unread counts: connect Upstash Redis (in the one-on-one phase, do presence in Node first — simple and sufficient;
   in slice 6 you'll migrate it, together with group-chat fan-out, into the standalone Go service, and that's when you'll grasp "why split it out").
-- Image messages: upload to Cloudflare R2 (note: media must also be client-side encrypted before upload). On web, file-pick instead of camera-roll; the encrypt-then-upload path is identical.
+- Image messages: **compress → encrypt → upload** to Cloudflare R2 (media is client-side encrypted before upload; compression happens *before* encryption — see clarification 10: lossy WebP/AVIF for photos, lossless for graphics; don't compress tiny text). On web, file-pick instead of camera-roll; the path is identical.
 - Push: get "you have a new message" working with **Expo Push (native)** and the **Web Push API (browser: service worker + VAPID)** behind one notification adapter (clarification 3). Push payloads carry no message content (GOALS Section VI).
 
 **Verify**: send-success / send-failed states are correct and a failed send can be resent (no read receipts appear anywhere); a push still arrives after backgrounding/closing — verify in the browser (closed tab, service-worker push) and, when set up, on the phone.
-**What you learn**: the message state machine, using Redis for volatile state, object storage, the push pipeline.
+**What you learn**: the message state machine, using Redis for volatile state, object storage, the push pipeline, and **client-side media compression** (lossless vs lossy, and why you compress *before* encrypting — clarification 10).
 
 ---
 
