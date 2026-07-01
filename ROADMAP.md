@@ -245,6 +245,7 @@ and a comparison of two real-time stacks (event loop vs CSP) — something a sin
 - **One codebase, web-first, behind a thin platform seam**: build and verify in the browser first, but keep every platform difference (key storage, local DB, push, screenshot) behind an adapter so the work is never web-only. The cost balloons if `Platform.OS` checks leak into app logic — like i18n, the seam is cheap on day one and a rewrite later (see clarification 9).
 - **The native desktop wrapper is optional but chosen = Tauri**: web/PWA *is* the desktop client for v1.0; the **Tauri** native app is a post-v1.0 upgrade (it buys OS-keychain key storage, stronger than the PWA), never a gate. Don't let "make a real desktop app" block shipping.
 - **Web/desktop is a convenience client, not an equal**: its key storage is weaker than native (clarification 2). Be honest about it in-product rather than over-promising parity.
+- **Ship the slice first, then optimize it** — performance is a *learning track*, not a rewrite: it tunes what already works, so it never slows the mainline (unlike a microservices rewrite, which would). Measure-first, then the star topic is E2EE envelope encryption. See [docs/performance-track.md](docs/performance-track.md).
 - **Tag a git tag at the end of each slice**, so a "working version" can always be found again.
 
 ---

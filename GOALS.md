@@ -217,6 +217,7 @@ These two are not "features" but **load-bearing constraints** — every other de
 | Database backup strategy | **P0** (was P1) | **Promoted because the backend is now fully self-hosted on a single VPS — one point of failure.** Scheduled **encrypted DB dumps to a *different* off-site location** (e.g. Backblaze B2, holding only encrypted dumps); the only backup must never live on the same box. Practise a restore at least once. Don't let one machine failure wipe out everyone's ciphertext. |
 | CI (run tests/build on commit) | P2 | |
 | Go real-time fan-out service (split out) | P2 | **A learning/architecture goal, not a v1.0 threshold.** Split presence + group-chat transport fan-out into a standalone Go service (ROADMAP slice 6). Can be deferred, can be downgraded — group-chat fan-out can first be done in Node and still reach v1.0. |
+| Performance optimization (learning track) | P2 | **A learning track, not a v1.0 gate — and it never slows shipping** (you optimize what's already shipped). Measure-first methodology + envelope encryption + client/backend/DB profiling. Full guide: [docs/performance-track.md](../docs/performance-track.md). Chosen over a microservices rewrite, which *would* slow shipping. |
 
 ---
 
