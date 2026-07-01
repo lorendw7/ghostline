@@ -152,7 +152,7 @@
 ### Slice 4 · Polishing the chat experience (weeks 5–6)
 **What to do**
 - Message status: **send outcome only — sending / sent / failed → resend. No read receipts and no recipient-side "delivered" indicators** (a deliberate privacy choice — the recipient's activity is never reported back; see GOALS Section II & VI).
-- Presence, unread counts: connect **self-hosted Redis** (Docker, on the VPS) (in the one-on-one phase, do presence in Node first — simple and sufficient;
+- Presence, unread counts: connect **self-hosted Redis** (Docker, on the VPS). **This is also where "live room presence" begins** (GOALS II-ter): a room screen reports "I'm here" while focused and vanishes on blur/disconnect — held in Redis with a short TTL + heartbeat, **never persisted, no "last seen."** (In the one-on-one phase, do presence in Node first — simple and sufficient;
   in slice 6 you'll migrate it, together with group-chat fan-out, into the standalone Go service, and that's when you'll grasp "why split it out").
 - Image messages: **compress → encrypt → upload** to **self-hosted MinIO** (S3-compatible object storage on the VPS; media is client-side encrypted before upload; compression happens *before* encryption — see clarification 10). Using the S3 API means you could swap back to a hosted bucket later by changing config only. Two tracks by source: **casual in-app camera/screenshot** → lossy WebP/AVIF (may downscale); **shared gallery / DSLR photo** → a **"Preserve quality / Original" mode** (full resolution, pass original JPEG through unchanged, or visually-lossless q≈95, with a size cap). Don't compress tiny text. On web, file-pick instead of camera-roll; the path is identical.
 - Push: get "you have a new message" working with **Expo Push (native)** and the **Web Push API (browser: service worker + VAPID)** behind one notification adapter (clarification 3). Push payloads carry no message content (GOALS Section VI).
@@ -199,7 +199,7 @@ Phone ──WebSocket──►  Go fan-out service (holds real-time connections 
 - Stand up a WebSocket service in Go (standard library `net/http` + `gorilla/websocket` or `nhooyr/websocket`).
 - One goroutine per connection to read, one goroutine to write; use a **channel** to deliver messages to the target connection —
   this is the essence of Go's concurrency model, an entirely different mental model from Node's event loop.
-- Move presence into this service; Node publishes "deliver this ciphertext blob to group X" via Redis pub/sub, and Go subscribes and fans it out to online members.
+- Move presence into this service, including **live room presence** (GOALS II-ter): a room-scoped, ephemeral "who's here now" roster driven by heartbeat + Redis TTL — broadcast to present members, **never persisted, no "last seen."** Vanishes on blur/disconnect. Node publishes "deliver this ciphertext blob to group X" via Redis pub/sub, and Go subscribes and fans it out to online members.
 - Group chat: **encryption fan-out stays on the client** (encrypt one copy per member with their own public key, see clarification 4),
   Go only handles **transport fan-out** (distributing these ciphertexts to the online people); offline people still go through Node's store-and-forward.
 - **Enforce the 30-member group cap server-side** (reject create/join beyond it). The cap exists because per-recipient fan-out makes per-message work grow linearly with group size — this is the honest edge of the design, not a temporary limit. See GOALS Section II-bis.

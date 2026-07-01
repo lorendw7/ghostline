@@ -86,6 +86,25 @@ These two are not "features" but **load-bearing constraints** — every other de
 
 ---
 
+## II-ter. Live room presence — ephemeral "who's here now" (groups reframed as rooms)
+
+> A group is also a **room**: when you open the room screen you appear in a **live roster of who's currently here**, updating in real time; **leave the screen and you vanish entirely**. It's the "like a phone call" feeling — ambient co-presence — without a call. The reliable E2EE messaging underneath is unchanged (offline delivery, no loss); this only *adds* a live presence layer.
+
+| Goal | Priority | Notes |
+| --- | --- | --- |
+| Live in-room roster | P1 (if built) | While a member has the room screen focused, they show as "here"; others in the room see the live list update as people come and go. |
+| Vanish on leave | P1 (if built) | Blur / navigate away / background / disconnect → removed from the roster immediately (or within one heartbeat). No trace remains. |
+| Reliable messages unchanged | P0 | Messages stay reliable E2EE with offline delivery — **you never miss a message by not being present** (not a call-style "miss it if absent"). Presence is the only live-ephemeral part. |
+
+**⚠️ Privacy rule that keeps this consistent with "no activity receipts / metadata minimization" (Section VI):**
+- **Presence is live-only.** It exists solely in the real-time connection — held in **Redis with a short TTL + heartbeat**, broadcast to the room's present members, and **never written to PostgreSQL, never logged, never turned into a "last seen X min ago."**
+- You are visible **only because you chose to open the room, and only while you're there.** This is opt-in-by-entering ambient presence (like others knowing you're on a call), **not** tracking of your activity over time.
+- Crash/disconnect is handled by the heartbeat TTL expiring the entry (reuses the Go service's heartbeat/backpressure design, [docs/realtime-service.md](../docs/realtime-service.md)).
+
+> **Technical home:** this is a natural extension of presence (slice 4) held in the **Go realtime fan-out service** (slice 6) — room-scoped, ephemeral, heartbeat-driven. It also pairs with the "Moments/quiet" ethos: live and gone, no history, no pressure.
+
+---
+
 ## III. Letter Mode (the soul of the product, kept restrained)
 
 | Goal | Priority | Notes |

@@ -20,7 +20,7 @@ An end-to-end encrypted (E2EE) private messaging app, invite-only registration, 
 
 ## Main modules
 
-- **Chat Mode (instant)**: E2EE real-time messages, group chat, multimedia, **bundled sticker/emoji packs** (custom uploads later), reactions, burn-after-reading, send-outcome status (sending / sent / failed — **no read receipts, ever**, see GOALS Section II & VI), screenshot alert.
+- **Chat Mode (instant)**: E2EE real-time messages, small-scale group chat (**groups are also "rooms" with live ephemeral presence** — a real-time "who's here now" roster that vanishes when you leave the screen, live-only/never persisted/no "last seen", see GOALS II-ter; messages stay reliable), multimedia, **bundled sticker/emoji packs** (custom uploads later), reactions, burn-after-reading, send-outcome status (sending / sent / failed — **no read receipts, ever**, see GOALS Section II & VI), screenshot alert.
 - **Letter Mode (antique-style letters)**: antique-style stationery, seal system, sealed sending (irrevocable), delayed delivery, opening/burning a letter animations, solar-term time display, incoming-letter push.
 - **Moments (quiet photo sharing, name "见影" tentative, post-Letter feature)**: a third surface built on "share and let go" — share a photo to a chosen friend / small circle with **no likes, no comments, no read receipts, no reply obligation** (the absence of engagement mechanics is the point — avoids "saw it but didn't reply" pressure). E2EE via per-recipient fan-out (same 30-cap + consistency hash as group chat), **3-day auto-expiry with a "save it yourself to keep" reminder**. Deliberately restrained — not an Instagram. See GOALS Section III-bis.
 

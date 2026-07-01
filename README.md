@@ -26,6 +26,7 @@
 
 - End-to-end encrypted real-time messaging
 - Small-scale group chats (hard cap of 30 members)
+- Live "rooms" — see who currently has the room open, in real time; leave the screen and your presence vanishes (live-only, never stored, no "last seen") — the ambient feel of a call, while messages stay reliable
 - Multimedia messages (images, voice, video) — **media auto-expires within 3 days**; you're reminded to download/save anything you want to keep
 - Bundled sticker / emoji packs (custom uploads later)
 - Everything is ephemeral — every text message expires (hard ceiling of 1 month; burn-after-reading is the shortest setting); media is shorter still (3 days)
